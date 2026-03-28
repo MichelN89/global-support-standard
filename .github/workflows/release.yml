@@ -53,6 +53,7 @@ jobs:
     name: publish-testpypi
     needs: build
     runs-on: ubuntu-latest
+    environment: testpypi
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -69,6 +70,7 @@ jobs:
     name: publish-pypi
     needs: publish-testpypi
     runs-on: ubuntu-latest
+    environment: pypi
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
