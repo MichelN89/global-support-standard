@@ -3,31 +3,56 @@
 ## Step 1: Install
 
 ```bash
-pip install gss-provider-sdk gss-adapter-shopify   # or gss-adapter-woocommerce
+pip install global-support-standard
 ```
 
-## Step 2: Initialize
+## Step 2: Run the reference provider (quick baseline)
 
 ```bash
-gss-init myshop
-cd myshop-gss
+gss-provider
 ```
 
-## Step 3: Configure (Shopify example)
+Default endpoint: `http://127.0.0.1:8000/v1`
+
+## Step 3: Integrate your own runtime adapter (production path)
+
+Implement `ShopRuntimeAdapter` so your shop owns token issuance, confirmation storage, and audit persistence.
 
 ```python
-from gss_provider import GSSProvider
-from gss_adapter_shopify import ShopifyAdapter
+from gss_provider.app import create_app
+from gss_provider.contracts import ConfirmationRecord, IssuedToken, ShopRuntimeAdapter
 
-provider = GSSProvider(
-    shop_name="myshop.com",
-    adapter=ShopifyAdapter(shop_url="https://myshop.myshopify.com", api_key="shpka_xxx"),
-    protocols_dir="./protocols"
-)
-provider.serve(port=8080)
+
+class MyShopAdapter(ShopRuntimeAdapter):
+    def issue_token(self, *, customer_id: str, method: str, ttl_seconds: int) -> IssuedToken:
+        ...
+
+    def resolve_customer(self, token: str) -> str | None:
+        ...
+
+    def create_confirmation(self, *, customer_id: str, payload: dict, ttl_seconds: int) -> ConfirmationRecord:
+        ...
+
+    def consume_confirmation(self, *, token: str, customer_id: str) -> ConfirmationRecord | None:
+        ...
+
+    def append_event(self, event: dict) -> None:
+        ...
+
+    def list_customer_events(self, customer_id: str) -> list[dict]:
+        ...
+
+
+app = create_app(adapter=MyShopAdapter())
 ```
 
-For custom platforms, implement domain classes. See [Full Spec](../spec/overview.md).
+Run with uvicorn:
+
+```bash
+uvicorn myshop_gss:app --host 0.0.0.0 --port 8080
+```
+
+For full contract guidance, see [Architecture](./architecture.md), [Authorization Model](./authorization-model.md), and [Full Spec](../spec/overview.md).
 
 ## Agent Delegation Quickstart (Recommended)
 
@@ -56,10 +81,11 @@ See [Agent Delegation Model](./agent-delegation-model.md) for full normative rec
 
 Customize templates in `protocols/`. See [Protocol Format](../protocols/FORMAT.md).
 
-## Step 5: Validate
+## Step 5: Validate (CI + conformance)
 
 ```bash
-gss validate localhost:8080 --level standard
+ruff check .
+pytest --cov=src --cov-report=term-missing --cov-fail-under=80
 ```
 
 ## Step 6: Deploy
