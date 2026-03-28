@@ -1,0 +1,36 @@
+trigger: delivery-not-received
+version: "1.0"
+rules:
+  - id: delayed_over_3_days
+    when:
+      days_since_expected:
+        gte: 3
+    response:
+      message_to_customer: "Your delivery is delayed. We can offer immediate replacement or full refund."
+      requires_confirmation: true
+      actions:
+        - type: offer
+          key: replacement
+          label: "Send replacement item"
+          requires_confirmation: true
+        - type: offer
+          key: refund
+          label: "Issue full refund"
+          requires_confirmation: true
+  - id: in_transit_recent_delay
+    when:
+      last_tracking_event: in_transit
+      days_since_expected:
+        lte: 2
+    response:
+      message_to_customer: "Package is still in transit. Please wait 48 hours before escalation."
+      requires_confirmation: false
+      actions:
+        - type: wait
+          label: "Wait 48 hours"
+default_response:
+  message_to_customer: "We are checking your shipment and will update shortly."
+  requires_confirmation: false
+  actions:
+    - type: inform
+      label: "Create investigation ticket"

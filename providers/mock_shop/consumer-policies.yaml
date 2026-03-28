@@ -1,0 +1,16 @@
+consumer_policies:
+  ai_agent:
+    allowed_action_levels: ["read", "request"]
+    max_requests_per_hour: 50
+    require_customer_otp_for:
+      - "returns initiate"
+    blocked_actions:
+      - "account delete-request"
+      - "account payment-methods delete"
+    must_use_protocols: true
+  app:
+    allowed_action_levels: ["read", "request", "critical"]
+    max_requests_per_hour: 100
+  browser_extension:
+    allowed_action_levels: ["read"]
+    max_requests_per_hour: 30
