@@ -1,3 +1,0 @@
-[console_scripts]
-gss = gss_cli.main:run
-gss-provider = gss_provider.app:run
