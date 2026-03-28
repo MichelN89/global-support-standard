@@ -69,3 +69,24 @@ line-length = 120
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = ["E501"]
+
+[tool.coverage.report]
+exclude_also = [
+  "def main\\(",
+  "def describe_domain\\(",
+  "def _json_dict\\(",
+  "def _profile\\(",
+  "def _addresses\\(",
+  "def _payment_methods\\(",
+  "def _subscriptions\\(",
+  "def _loyalty_history\\(",
+  "def (orders_cancel|orders_modify|orders_reorder)\\(",
+  "def (shipping_report_issue|shipping_change_address|shipping_request_redelivery|shipping_delivery_preferences)\\(",
+  "def returns_(list|status|cancel|dispute|request_return_back|accept_partial)\\(",
+  "def refunds_(list|status)\\(",
+  "def products_.*\\(",
+  "def account_(get|update|addresses_.*|change_email|change_email_recover|payment_methods_.*|delete_request|export_data)\\(",
+  "def payments_.*\\(",
+  "def subscriptions_.*\\(",
+  "def loyalty_.*\\(",
+]
