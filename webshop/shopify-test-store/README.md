@@ -1,53 +1,71 @@
-# Shopify Test Store Project
+# Shopify Integration Example
 
-This is a webshop project inside the GSS repo, wired for a Shopify test store.
+This project shows the exact boundary you asked for: GSS standard logic is reusable, while all webshop behavior remains owned by the webshop implementation.
 
-It demonstrates the intended production boundary:
+## Ownership Split (Important)
 
-- GSS packages provide protocol contracts and orchestration.
-- The webshop project owns credentialing, token/session behavior, and infra choices.
+- GSS packages (`src/gss_core`, `src/gss_provider`) own:
+  - protocol contracts
+  - request/response envelope semantics
+  - validation and shared action-level behavior
+- Teststore webshop project (`src/gss_webshop_shopify`) owns:
+  - Shopify credentials and API access
+  - token/session behavior (runtime adapter)
+  - audit persistence choice
+  - business rollout choices (supported/unsupported commands)
 
-## Current Implementation
+So no production customer data needs to flow through "central GSS servers"; this provider runs in the webshop deployment.
+
+## Current Endpoints
 
 - Implemented:
   - `describe`
-  - `auth login` (shop-owned local session token for development)
-  - `orders list/get` (Shopify Admin API)
+  - `auth verify-customer` (identity proof with order+email/phone, or phone recovery)
+  - `auth issue-token` (one-time verification exchange for short-lived token)
+  - `auth login` (legacy dev shortcut)
+  - `orders list`
+  - `orders get`
   - `shipping track`
-- Strictly not supported (for now):
+- Explicitly unsupported:
   - `account get`
   - `payments get`
 
-Unsupported actions return `ACTION_NOT_SUPPORTED`.
+Unsupported actions intentionally return `ACTION_NOT_SUPPORTED`.
 
-## Setup
+## Local Setup
 
-1. Copy env template:
-
-```bash
-cp webshop/shopify-test-store/.env.example .env
-```
-
-2. Fill Shopify values:
-- `SHOPIFY_SHOP_DOMAIN`
-- `SHOPIFY_ADMIN_TOKEN`
-
-3. Run provider:
+1) Create local env:
 
 ```bash
-gss-shopify-provider
+cp webshop/shopify-test-store/.env.example webshop/shopify-test-store/.env
 ```
 
-Provider runs by default at `http://127.0.0.1:8010/v1`.
+2) Edit env values in `webshop/shopify-test-store/.env`:
+- `GSS_SHOP_NAME=Example Shop`
+- `SHOPIFY_SHOP_DOMAIN=your-store.myshopify.com`
+- `SHOPIFY_ADMIN_TOKEN=...`
 
-## Quick Test
+3) Start provider with env loaded:
 
 ```bash
-gss mockshop.local describe
-GSS_DEFAULT_ENDPOINT=http://127.0.0.1:8010/v1 gss mystore.myshopify.com auth login --method api_key --customer-id CUST-001
-GSS_DEFAULT_ENDPOINT=http://127.0.0.1:8010/v1 gss mystore.myshopify.com orders list
+webshop/shopify-test-store/run-local.sh
 ```
 
-## Important Note
+Default endpoint: `http://127.0.0.1:8010/v1`
 
-The auth flow in this project is intentionally development-oriented. For production, replace login/session behavior with your real customer auth integration.
+## Smoke Test (CLI)
+
+```bash
+GSS_DEFAULT_ENDPOINT=http://127.0.0.1:8010/v1 gss your-store.myshopify.com describe
+# Standard flow: verify identity then issue token
+GSS_DEFAULT_ENDPOINT=http://127.0.0.1:8010/v1 gss your-store.myshopify.com auth verify-customer --order-id 1234567890 --email customer@example.com
+GSS_DEFAULT_ENDPOINT=http://127.0.0.1:8010/v1 gss your-store.myshopify.com auth issue-token --verification-id <verification_id> --method api_key
+GSS_DEFAULT_ENDPOINT=http://127.0.0.1:8010/v1 gss your-store.myshopify.com orders list
+```
+
+## Production Note
+
+`ShopOwnedRuntimeAdapter` is intentionally local-dev. For production, replace it with your real webshop infrastructure (e.g. Redis/Postgres/KMS-backed auth + audit).
+Legacy `auth login` is available for development only. Production integrations should use `verify-customer` + `issue-token`.
+If the customer entered a wrong email and does not know `order_id`, this demo supports a phone recovery lookup path in `auth verify-customer --phone <number>`.
+Read actions are guarded as well: `orders get` and `shipping track` validate `order_id` format and enforce customer ownership before returning data.

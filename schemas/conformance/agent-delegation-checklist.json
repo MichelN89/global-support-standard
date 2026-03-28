@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GSS Agent Delegation Conformance Checklist",
+  "description": "Language-agnostic conformance requirements for data-bearing and delegated agent flows.",
+  "type": "object",
+  "required": [
+    "version",
+    "requirements"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "assertion"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "auth",
+              "validation",
+              "ownership",
+              "audit",
+              "error-semantics"
+            ]
+          },
+          "assertion": {
+            "type": "string"
+          },
+          "expected_error_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "version": "1.0",
+      "requirements": [
+        {
+          "id": "AUTH-001",
+          "category": "auth",
+          "assertion": "Protected endpoints require customer auth context.",
+          "expected_error_codes": [
+            "UNAUTHORIZED",
+            "MISSING_HEADERS"
+          ]
+        },
+        {
+          "id": "VAL-001",
+          "category": "validation",
+          "assertion": "Resource identifiers are server-side validated.",
+          "expected_error_codes": [
+            "VALIDATION_ERROR"
+          ]
+        },
+        {
+          "id": "OWN-001",
+          "category": "ownership",
+          "assertion": "Data is returned only for resources owned by the authenticated customer.",
+          "expected_error_codes": [
+            "FORBIDDEN"
+          ]
+        }
+      ]
+    }
+  ]
+}

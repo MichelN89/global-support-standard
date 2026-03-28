@@ -1,0 +1,12 @@
+{
+  "name": "@gss/sdk-typescript",
+  "version": "0.0.0-development",
+  "private": true,
+  "description": "Scaffold for future TypeScript GSS SDK.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "echo \"TODO: add TypeScript build\"",
+    "test": "echo \"TODO: add TypeScript conformance tests\""
+  }
+}

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "global-support-standard"
-version = "0.1.0"
+version = "0.2.0"
 description = "GSS Python MVP: provider API + CLI consumer"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -56,5 +56,16 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+gss_provider = ["protocols/*.yaml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

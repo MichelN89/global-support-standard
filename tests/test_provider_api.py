@@ -27,6 +27,8 @@ def test_describe_shop() -> None:
     payload = response.json()
     assert payload["status"] == "ok"
     assert "orders" in payload["data"]["domains"]
+    assert "authorization" in payload["data"]
+    assert "gss_scopes_supported" in payload["data"]["authorization"]
     assert "compliance" in payload["data"]
     assert "certified" in payload["data"]["compliance"]
 
@@ -50,6 +52,21 @@ def test_forbidden_cross_customer_order_access() -> None:
     assert response.status_code == 403
     payload = response.json()
     assert payload["error"]["code"] == "FORBIDDEN"
+
+
+def test_invalid_order_id_rejected_for_get_and_tracking() -> None:
+    client = TestClient(app)
+    auth = client.post("/v1/auth/login", json={"method": "api_key", "customer_id": "CUST-001"}).json()
+    token = auth["data"]["access_token"]
+    headers = _auth_headers(token)
+
+    bad_get = client.get("/v1/orders/ORD.1001", headers=headers)
+    assert bad_get.status_code == 400
+    assert bad_get.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    bad_track = client.get("/v1/shipping/track/ORD$1001", headers=headers)
+    assert bad_track.status_code == 400
+    assert bad_track.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_returns_initiate_then_confirm() -> None:

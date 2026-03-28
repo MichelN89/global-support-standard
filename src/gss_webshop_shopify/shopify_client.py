@@ -29,7 +29,10 @@ class ShopifyAdminClient:
         params: dict[str, Any] = {
             "status": "any",
             "limit": max(1, min(limit, 50)),
-            "fields": "id,name,created_at,financial_status,fulfillment_status,total_price,currency,line_items,customer",
+            "fields": (
+                "id,name,created_at,financial_status,fulfillment_status,total_price,currency,"
+                "line_items,customer,shipping_address"
+            ),
         }
         if status:
             params["fulfillment_status"] = status
@@ -43,7 +46,12 @@ class ShopifyAdminClient:
             resp = client.get(
                 f"{self._base_url}/orders/{order_id}.json",
                 headers=self._headers(),
-                params={"fields": "id,name,created_at,financial_status,fulfillment_status,total_price,currency,line_items,customer,fulfillments"},
+                params={
+                    "fields": (
+                        "id,name,created_at,financial_status,fulfillment_status,total_price,currency,"
+                        "line_items,customer,shipping_address,fulfillments"
+                    )
+                },
             )
         if resp.status_code == 404:
             return None
@@ -71,6 +79,11 @@ def map_shopify_order(order: dict[str, Any]) -> dict[str, Any]:
         }
         for item in order.get("line_items", [])
     ]
+    customer = order.get("customer") or {}
+    default_address = customer.get("default_address") or {}
+    shipping_address = order.get("shipping_address") or {}
+    customer_phone = customer.get("phone") or default_address.get("phone") or shipping_address.get("phone")
+
     return {
         "id": str(order.get("id")),
         "name": order.get("name"),
@@ -79,5 +92,7 @@ def map_shopify_order(order: dict[str, Any]) -> dict[str, Any]:
         "currency": order.get("currency"),
         "total_price": float(order.get("total_price", 0)),
         "items": items,
-        "customer_email": (order.get("customer") or {}).get("email"),
+        "customer_id": str(customer.get("id")) if customer.get("id") else None,
+        "customer_email": customer.get("email"),
+        "customer_phone": customer_phone,
     }

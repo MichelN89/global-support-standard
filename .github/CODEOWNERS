@@ -1,0 +1,15 @@
+# Default ownership
+* @MichelN89
+
+# Critical CI and release infrastructure
+/.github/workflows/ @MichelN89
+/pyproject.toml @MichelN89
+
+# Core contracts and provider runtime
+/src/gss_core/ @MichelN89
+/src/gss_provider/ @MichelN89
+
+# Security- and policy-critical documentation
+/docs/authorization-model.md @MichelN89
+/docs/agent-delegation-model.md @MichelN89
+/docs/registry-security.md @MichelN89

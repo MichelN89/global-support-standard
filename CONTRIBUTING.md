@@ -40,6 +40,8 @@ pytest
 - `src/gss_provider/` - FastAPI provider server
 - `src/gss_cli/` - Typer CLI
 - `src/gss_core/` - shared models/envelope/errors
+- `src/gss_webshop_shopify/` - Shopify webshop reference implementation
+- `webshop/shopify-test-store/` - local example project wiring
 - `protocols/` - protocol format and examples
 - `docs/` - onboarding and architecture docs
 - `spec/` - protocol narrative/spec references
@@ -50,11 +52,19 @@ pytest
 Before opening a PR:
 
 - [ ] Tests pass locally (`pytest`)
+- [ ] Lint passes locally (`ruff check .`)
+- [ ] Coverage threshold passes (`pytest --cov=src --cov-report=term-missing --cov-fail-under=80`)
 - [ ] Packaging checks pass locally (`python -m build` and `twine check dist/*`)
 - [ ] New behavior is covered by tests
 - [ ] README/docs updated if user-facing behavior changed
 - [ ] No generated artifacts committed (`__pycache__`, `.pyc`, `.egg-info`)
+- [ ] No local-only files or secrets committed (`.env`, machine-local settings)
 - [ ] Commit messages explain intent clearly
+
+## Main Branch Policy
+
+`main` is intended to be protected with required pull requests and required CI checks.
+See `docs/repository-governance.md` for the exact protection policy and required status checks.
 
 ## Commit Guidance
 

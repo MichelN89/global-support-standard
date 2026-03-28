@@ -6,5 +6,10 @@ __pycache__/
 *.egg-info/
 **/*.egg-info/
 .pytest_cache/
+.coverage
+.coverage.*
 dist/
 build/
+.env
+**/.env
+node_modules/

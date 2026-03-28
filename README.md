@@ -39,6 +39,7 @@ Today these flows are reimplemented per shop and routed through human agents. GS
 | `src/gss_core` | Shared models, envelope helpers, and error contracts |
 | `protocols/` | Protocol format docs and runnable YAML examples |
 | `providers/mock_shop` | Example consumer-policy configuration |
+| `sdk/typescript` | TypeScript SDK scaffold (non-blocking roadmap) |
 | `spec/` | Protocol/spec narrative and architecture references |
 | `docs/` | Getting-started docs for shops and consumers |
 | `tests/` | API and CLI integration tests |
@@ -119,6 +120,7 @@ gss-shopify-provider
 ```
 
 See `webshop/shopify-test-store/README.md` for setup against your test store.
+The Shopify demo includes an agent-first auth flow (`auth verify-customer` -> `auth issue-token`) in addition to legacy dev login.
 
 ## HTTP Endpoints (MVP)
 
@@ -153,6 +155,31 @@ See `webshop/shopify-test-store/README.md` for setup against your test store.
   - `describe` includes compliance metadata (`level`, `certified`, `test_suite_version`)
   - CLI warns when a shop is uncertified or missing compliance metadata
 
+## Production Minimum Config
+
+For production deployments, minimum baseline should include:
+
+- Auth + headers on protected calls:
+  - `Authorization: Bearer <token>`
+  - `GSS-Consumer-Id`
+  - `GSS-Consumer-Type`
+  - `GSS-Version`
+- Token policy:
+  - short-lived access tokens (recommended 5-60 minutes)
+  - least-privilege scopes per domain/action level
+  - optional binding to consumer identity (`GSS-Consumer-Id`)
+- Data guardrails:
+  - validate identifiers server-side
+  - enforce customer ownership checks before returning payloads
+  - fail closed (`VALIDATION_ERROR`/`FORBIDDEN`)
+- Action controls:
+  - `request` actions with two-step confirmation
+  - `critical` actions with out-of-band verification
+- Governance and CI:
+  - branch protection on `main`
+  - required checks: lint, tests matrix, coverage, package-check, dependency-audit
+  - CODEOWNERS and PR template enabled
+
 ## Trust Boundary
 
 GSS defines protocol contracts and package logic. Shop implementations own operational security and persistence (token systems, session stores, audit infrastructure).  
@@ -174,13 +201,17 @@ Current test coverage includes:
 
 ## Documentation
 
-- Main briefing: `gss-open-standard-briefing (1).md`
 - Spec overview: `spec/overview.md`
 - Architecture deep dive: `docs/architecture.md`
 - API request examples: `docs/api-examples.md`
 - Compliance/trust boundary: `docs/compliance-and-trust.md`
+- Authorization model: `docs/authorization-model.md`
+- Agent delegation model: `docs/agent-delegation-model.md`
+- Multi-language roadmap: `docs/multi-language-roadmap.md`
+- Repository governance: `docs/repository-governance.md`
 - Registry security spec: `docs/registry-security.md`
 - Registry conformance checklist: `docs/registry-conformance-checklist.md`
+- Conformance schema: `schemas/conformance/agent-delegation-checklist.json`
 - Shopify webshop project: `webshop/shopify-test-store/README.md`
 - Shop onboarding: `docs/getting-started-shops.md`
 - Consumer onboarding: `docs/getting-started-consumers.md`

@@ -6,8 +6,32 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  lint-ruff:
+    name: lint-ruff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run Ruff lint
+        run: ruff check .
+
+  tests:
+    name: tests-py${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -29,7 +53,28 @@ jobs:
       - name: Run tests
         run: pytest
 
+  coverage:
+    name: coverage-threshold
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Enforce test coverage
+        run: pytest --cov=src --cov-report=term-missing --cov-fail-under=80
+
   package-check:
+    name: package-check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -50,3 +95,24 @@ jobs:
 
       - name: Validate package metadata
         run: twine check dist/*
+
+  dependency-audit:
+    name: dependency-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project and audit tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pip-audit
+
+      - name: Run dependency vulnerability audit
+        run: pip-audit

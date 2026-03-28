@@ -155,6 +155,42 @@ def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) 
         _emit(res)
         return
 
+    if domain == "auth" and action == "verify-customer":
+        body: dict[str, Any] = {}
+        if "order_id" in flags:
+            body["order_id"] = flags["order_id"]
+        if "email" in flags:
+            body["email"] = flags["email"]
+        if "phone" in flags:
+            body["phone"] = flags["phone"]
+        _emit(
+            _request(
+                method="POST",
+                endpoint=endpoint,
+                path="/auth/verify-customer",
+                body=body,
+            )
+        )
+        return
+
+    if domain == "auth" and action == "issue-token":
+        method = flags.get("method", "api_key")
+        res = _request(
+            method="POST",
+            endpoint=endpoint,
+            path="/auth/issue-token",
+            body={"verification_id": flags["verification_id"], "method": method},
+        )
+        token = res["data"]["access_token"]
+        if os.getenv("GSS_STORE_TOKENS", "1").lower() in {"0", "false", "no"}:
+            typer.echo("Token storage disabled. Export GSS_CUSTOMER_TOKEN for subsequent commands.", err=True)
+        else:
+            tokens = _load_tokens()
+            tokens[shop] = token
+            _save_tokens(tokens)
+        _emit(res)
+        return
+
     if action == "describe":
         _emit(_request(method="GET", endpoint=endpoint, path=f"/{domain}/describe"))
         return

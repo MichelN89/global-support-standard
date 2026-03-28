@@ -10,6 +10,7 @@ class ShopifyProviderSettings:
     host: str
     port: int
     debug: bool
+    shop_name: str
     shop_domain: str
     admin_token: str
     api_version: str
@@ -25,6 +26,7 @@ def load_settings() -> ShopifyProviderSettings:
         host=os.getenv("GSS_PROVIDER_HOST", "127.0.0.1"),
         port=int(os.getenv("GSS_PROVIDER_PORT", "8010")),
         debug=os.getenv("GSS_PROVIDER_DEBUG", "0").lower() in {"1", "true", "yes"},
+        shop_name=os.getenv("GSS_SHOP_NAME", "Shopify Test Store"),
         shop_domain=os.getenv("SHOPIFY_SHOP_DOMAIN", ""),
         admin_token=os.getenv("SHOPIFY_ADMIN_TOKEN", ""),
         api_version=os.getenv("SHOPIFY_API_VERSION", "2024-10"),

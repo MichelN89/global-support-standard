@@ -13,17 +13,20 @@ from gss_core.envelope import fail, ok
 from gss_core.errors import GssError, err
 from gss_core.models import (
     AuthLoginRequest,
+    AuthorizationMetadata,
+    ComplianceMetadata,
     OrdersListQuery,
     ProtocolGetRequest,
     ReturnsCheckEligibilityRequest,
     ReturnsConfirmRequest,
     ReturnsInitiateRequest,
 )
+from gss_core.security import validate_resource_id
 from gss_provider.audit import get_customer_audit, log_action
 from gss_provider.auth import redact_token, validate_headers
 from gss_provider.contracts import ShopRuntimeAdapter
-from gss_provider.mock_data import get_order, list_orders, owns_order, return_eligibility
 from gss_provider.mock_adapter import InMemoryShopAdapter
+from gss_provider.mock_data import get_order, list_orders, owns_order, return_eligibility
 from gss_provider.protocol_engine import ProtocolEngine
 from gss_provider.settings import ProviderSettings, load_settings
 
@@ -81,6 +84,43 @@ def create_app(
     @app.get("/v1/describe")
     def describe_shop(request: Request) -> dict[str, Any]:
         request_id = getattr(request.state, "request_id", request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}"))
+        authorization = AuthorizationMetadata(
+            gss_scopes_supported=[
+                "orders:read",
+                "shipping:read",
+                "returns:read",
+                "returns:request",
+                "protocols:read",
+                "account:read",
+            ],
+            scope_policy={
+                "deny_by_default": True,
+                "least_privilege_required": True,
+                "action_level_enforced": True,
+            },
+            scope_mapping_hints=[
+                {
+                    "gss_scope": "orders:read",
+                    "adapter_scope": "adapter:orders:read",
+                    "note": "Reference adapter-local permission identifier",
+                },
+                {
+                    "gss_scope": "returns:request",
+                    "adapter_scope": "adapter:returns:request",
+                    "note": "Reference adapter-local permission identifier",
+                },
+            ],
+            custom_scopes=[],
+        )
+        compliance = ComplianceMetadata(
+            level=runtime_settings.compliance_level,
+            certified=runtime_settings.certified,
+            test_suite_version=runtime_settings.test_suite_version,
+            responsibility_boundary=(
+                "GSS defines protocol contracts and validation. "
+                "Shop implementations own token issuance, persistence, and audit infrastructure."
+            ),
+        )
         return ok(
             {
                 "shop": "mockshop.local",
@@ -89,15 +129,8 @@ def create_app(
                 "domains": ["orders", "shipping", "returns", "protocols", "account", "auth"],
                 "auth_methods": ["oauth2", "api_key"],
                 "endpoint": runtime_settings.endpoint,
-                "compliance": {
-                    "level": runtime_settings.compliance_level,
-                    "certified": runtime_settings.certified,
-                    "test_suite_version": runtime_settings.test_suite_version,
-                    "responsibility_boundary": (
-                        "GSS defines protocol contracts and validation. "
-                        "Shop implementations own token issuance, persistence, and audit infrastructure."
-                    ),
-                },
+                "authorization": authorization.model_dump(),
+                "compliance": compliance.model_dump(),
             },
             request_id,
         )
@@ -187,6 +220,7 @@ def create_app(
         gss_version: str | None = Header(default=None, alias="GSS-Version"),
         gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
     ) -> dict[str, Any]:
+        validate_resource_id(field_name="order_id", value=order_id)
         auth = _ctx(
             authorization=authorization,
             consumer_id=consumer_id,
@@ -210,6 +244,7 @@ def create_app(
         gss_version: str | None = Header(default=None, alias="GSS-Version"),
         gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
     ) -> dict[str, Any]:
+        validate_resource_id(field_name="order_id", value=order_id)
         auth = _ctx(
             authorization=authorization,
             consumer_id=consumer_id,

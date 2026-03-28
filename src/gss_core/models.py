@@ -39,11 +39,50 @@ class DescribeResponse(BaseModel):
     domains: list[str]
     auth_methods: list[str]
     endpoint: str
+    authorization: dict[str, Any] | None = None
+    compliance: dict[str, Any] | None = None
+
+
+class ScopePolicy(BaseModel):
+    deny_by_default: bool
+    least_privilege_required: bool
+    action_level_enforced: bool
+
+
+class ScopeMappingHint(BaseModel):
+    gss_scope: str
+    adapter_scope: str
+    note: str | None = None
+
+
+class AuthorizationMetadata(BaseModel):
+    gss_scopes_supported: list[str]
+    scope_policy: ScopePolicy
+    scope_mapping_hints: list[ScopeMappingHint] = Field(default_factory=list)
+    custom_scopes: list[str] = Field(default_factory=list)
+
+
+class ComplianceMetadata(BaseModel):
+    level: str
+    certified: bool
+    test_suite_version: str
+    responsibility_boundary: str
 
 
 class AuthLoginRequest(BaseModel):
     method: str = Field(pattern=r"^(oauth2|api_key)$")
     customer_id: str = "CUST-001"
+
+
+class AuthVerifyCustomerRequest(BaseModel):
+    order_id: str | None = None
+    email: str | None = None
+    phone: str | None = None
+
+
+class AuthIssueTokenRequest(BaseModel):
+    verification_id: str
+    method: str = Field(pattern=r"^(oauth2|api_key)$")
 
 
 class OrdersListQuery(BaseModel):

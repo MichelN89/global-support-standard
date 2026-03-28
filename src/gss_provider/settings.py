@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 
 
@@ -19,10 +20,18 @@ class ProviderSettings:
     test_suite_version: str
 
 
+def _default_protocol_dir() -> Path:
+    # Dev mode: use repository protocols directory when running from source tree.
+    repo_candidate = Path(__file__).resolve().parents[2] / "protocols"
+    if repo_candidate.exists():
+        return repo_candidate
+    # Installed mode: fallback to bundled package data.
+    return Path(resources.files("gss_provider").joinpath("protocols"))
+
+
 def load_settings() -> ProviderSettings:
-    project_root = Path(__file__).resolve().parents[2]
     return ProviderSettings(
-        protocol_dir=Path(os.getenv("GSS_PROTOCOL_DIR", str(project_root / "protocols"))),
+        protocol_dir=Path(os.getenv("GSS_PROTOCOL_DIR", str(_default_protocol_dir()))),
         endpoint=os.getenv("GSS_PROVIDER_ENDPOINT", "http://127.0.0.1:8000/v1"),
         host=os.getenv("GSS_PROVIDER_HOST", "127.0.0.1"),
         port=int(os.getenv("GSS_PROVIDER_PORT", "8000")),

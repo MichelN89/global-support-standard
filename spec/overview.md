@@ -195,6 +195,8 @@ $ gss coolblue.nl orders list
 
 AI agents like Support Squad AI would use `api_key` — the tenant configures their GSS credentials once, and the agent uses them for all interactions.
 
+Authorization scope design and adapter flexibility rules are defined in `docs/authorization-model.md`.
+
 ---
 
 ## 3. Core Domains

@@ -5,6 +5,7 @@ from typing import Any
 
 from gss_provider.contracts import ShopRuntimeAdapter
 
+
 def log_action(
     store: ShopRuntimeAdapter,
     *,
