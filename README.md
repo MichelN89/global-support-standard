@@ -2,6 +2,8 @@
 
 Open protocol for machine-readable e-commerce support.
 
+![Global Support Standard logo](docs/assets/gss-logo.png)
+
 [![CI](https://github.com/Global-Support-Standard/global-support-standard/actions/workflows/ci.yml/badge.svg)](https://github.com/Global-Support-Standard/global-support-standard/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/Global-Support-Standard/global-support-standard)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
@@ -209,6 +211,7 @@ Current test coverage includes:
 - Agent delegation model: `docs/agent-delegation-model.md`
 - Multi-language roadmap: `docs/multi-language-roadmap.md`
 - Repository governance: `docs/repository-governance.md`
+- Cloud Run deployment: `docs/deploy-cloud-run.md`
 - Registry security spec: `docs/registry-security.md`
 - Registry conformance checklist: `docs/registry-conformance-checklist.md`
 - Conformance schema: `schemas/conformance/agent-delegation-checklist.json`
