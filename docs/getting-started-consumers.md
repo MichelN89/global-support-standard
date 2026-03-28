@@ -6,11 +6,24 @@
 pip install global-support-standard
 ```
 
-## Discover & Authenticate
+## Discover
 
 ```bash
 gss coolblue.nl describe
-gss coolblue.nl auth login --method oauth2
+```
+
+## Authenticate (Agent-first flow)
+
+```bash
+gss coolblue.nl auth verify-customer --order-id ORD-12345 --email customer@example.com
+gss coolblue.nl auth issue-token --verification-id <verification_id> --method api_key
+```
+
+If the customer does not know the order id, use recovery verification (when supported by the shop):
+
+```bash
+gss coolblue.nl auth verify-customer --phone +31612345678
+gss coolblue.nl auth issue-token --verification-id <verification_id> --method api_key
 ```
 
 ## Interact
@@ -27,3 +40,7 @@ gss coolblue.nl protocols get --trigger "delivery-not-received" --context '{"ord
 ## For AI Agents
 
 Use `gss --describe` for auto-discovery. Rules: always use protocols, always show confirmation summaries, never attempt critical-level actions, relay protocol messages verbatim.
+
+## Legacy login (dev-only)
+
+`auth login` exists for local/dev compatibility. Production consumers should prefer `verify-customer` -> `issue-token`.
