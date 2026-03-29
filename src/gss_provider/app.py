@@ -47,7 +47,7 @@ def create_app(
     runtime_adapter = adapter or InMemoryShopAdapter()
     protocol_engine = ProtocolEngine(runtime_settings.protocol_dir)
 
-    app = FastAPI(title="GSS Provider", version="0.2.0")
+    app = FastAPI(title="GSS Provider", version="0.2.1")
     return_records: dict[str, dict[str, Any]] = {}
     refund_records: dict[str, dict[str, Any]] = {}
     payment_disputes: list[dict[str, Any]] = []

@@ -32,15 +32,15 @@ pip-audit
 - [ ] `python -m build` produces valid `sdist` and `wheel`.
 - [ ] `twine check dist/*` passes with no warnings.
 - [ ] New CI checks are green (`lint-ruff`, tests matrix, coverage, package-check, dependency-audit).
-- [ ] Tag matches project version (for example `v0.2.0`).
+- [ ] Tag matches project version (for example `v0.2.1`).
 
 ## Tag and Trigger Release
 
 ```bash
 git checkout main
 git pull
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 The tag triggers `.github/workflows/release.yml`.
@@ -66,7 +66,7 @@ Trusted publishing should be configured for both indexes.
 python -m venv /tmp/gss-release-test
 source /tmp/gss-release-test/bin/activate
 pip install --upgrade pip
-pip install global-support-standard==0.2.0
+pip install global-support-standard==0.2.1
 gss --help
 ```
 
