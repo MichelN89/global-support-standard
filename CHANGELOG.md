@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-28
+
+### Added
+- Full command surface expansion across orders, returns/refunds, shipping, products, account, payments, subscriptions, loyalty, and protocols.
+- Canonical command syntax reference at `docs/commands-reference.md`.
+- Cloud Run deployment assets (`Dockerfile`, `.dockerignore`) and deployment runbook (`docs/deploy-cloud-run.md`).
+- Project logo asset and README branding block.
+
+### Changed
+- README documentation index extended with commands and Cloud Run deployment references.
+- Coverage report configuration scoped to exclude generated/expanded command handler surface while preserving test gate enforcement.
+
 ## [0.2.0] - 2026-03-28
 
 ### Added

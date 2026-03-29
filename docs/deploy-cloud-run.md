@@ -70,3 +70,24 @@ To expose `api.globassupportstandard.com`:
   - `--service-account gss-runtime@${GCP_PROJECT_ID}.iam.gserviceaccount.com`
 - Store secrets in Secret Manager (instead of plain env vars)
 
+## 9) GitHub automation on push to `main`
+
+This repository includes:
+
+- `.github/workflows/deploy-cloud-run-main.yml`
+- `.github/workflows/publish-on-main.yml`
+
+Configure these repository secrets for Cloud Run deployment:
+
+- `GCP_WORKLOAD_IDENTITY_PROVIDER` (OIDC provider resource name)
+- `GCP_SERVICE_ACCOUNT` (deployer service account email)
+- `GCP_PROJECT_ID`
+- `GCP_REGION` (for example `europe-west4`)
+- `CLOUD_RUN_SERVICE` (for example `gss-provider`)
+- `ARTIFACT_REPOSITORY` (for example `gss`)
+
+Package publishing on `main` is version-aware:
+
+- if `pyproject.toml` version already exists on PyPI, publish is skipped
+- if version is new, workflow publishes to TestPyPI then PyPI
+

@@ -1,0 +1,77 @@
+name: Deploy Cloud Run (main)
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: deploy-cloud-run
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      CLOUD_RUN_SERVICE: ${{ secrets.CLOUD_RUN_SERVICE }}
+      ARTIFACT_REPOSITORY: ${{ secrets.ARTIFACT_REPOSITORY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          test -n "${GCP_PROJECT_ID}" || (echo "Missing secret: GCP_PROJECT_ID" && exit 1)
+          test -n "${GCP_REGION}" || (echo "Missing secret: GCP_REGION" && exit 1)
+          test -n "${CLOUD_RUN_SERVICE}" || (echo "Missing secret: CLOUD_RUN_SERVICE" && exit 1)
+          test -n "${ARTIFACT_REPOSITORY}" || (echo "Missing secret: ARTIFACT_REPOSITORY" && exit 1)
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Ensure required APIs enabled
+        run: |
+          gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+
+      - name: Ensure Artifact Registry repo exists
+        run: |
+          gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" --location="${GCP_REGION}" >/dev/null 2>&1 || \
+          gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
+            --repository-format=docker \
+            --location="${GCP_REGION}" \
+            --description="GSS container images"
+
+      - name: Build and push image
+        id: build
+        run: |
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/gss-provider:${GITHUB_SHA}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          gcloud builds submit --tag "${IMAGE}" .
+
+      - name: Deploy Cloud Run service
+        run: |
+          gcloud run deploy "${CLOUD_RUN_SERVICE}" \
+            --image "${{ steps.build.outputs.image }}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --set-env-vars "GSS_PROVIDER_HOST=0.0.0.0,GSS_PROVIDER_PORT=8080,GSS_COMPLIANCE_LEVEL=standard,GSS_CERTIFIED=false,GSS_TEST_SUITE_VERSION=0.2.1"
+
+      - name: Set runtime endpoint to deployed URL
+        run: |
+          SERVICE_URL="$(gcloud run services describe "${CLOUD_RUN_SERVICE}" --region "${GCP_REGION}" --format='value(status.url)')"
+          gcloud run services update "${CLOUD_RUN_SERVICE}" \
+            --region "${GCP_REGION}" \
+            --update-env-vars "GSS_PROVIDER_ENDPOINT=${SERVICE_URL}/v1"
