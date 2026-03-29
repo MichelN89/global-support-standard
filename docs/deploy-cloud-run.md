@@ -14,7 +14,8 @@ This runbook deploys `gss_provider` to Cloud Run as a public HTTPS endpoint.
 export GCP_PROJECT_ID="your-project-id"
 export GCP_REGION="europe-west4"
 export SERVICE_NAME="gss-provider"
-export IMAGE="gcr.io/${GCP_PROJECT_ID}/${SERVICE_NAME}:$(git rev-parse --short HEAD)"
+export ARTIFACT_REPOSITORY="gss"
+export IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${SERVICE_NAME}:$(git rev-parse --short HEAD)"
 ```
 
 ## 3) Configure project and APIs
@@ -22,6 +23,11 @@ export IMAGE="gcr.io/${GCP_PROJECT_ID}/${SERVICE_NAME}:$(git rev-parse --short H
 ```bash
 gcloud config set project "${GCP_PROJECT_ID}"
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" --location="${GCP_REGION}" >/dev/null 2>&1 || \
+gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
+  --repository-format=docker \
+  --location="${GCP_REGION}" \
+  --description="GSS container images"
 ```
 
 ## 4) Build container image
@@ -39,7 +45,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --platform managed \
   --allow-unauthenticated \
   --port 8080 \
-  --set-env-vars "GSS_PROVIDER_ENDPOINT=https://${SERVICE_NAME}-$(echo ${GCP_REGION} | tr - _)-$(gcloud config get-value project).a.run.app/v1,GSS_PROVIDER_HOST=0.0.0.0,GSS_PROVIDER_PORT=8080,GSS_COMPLIANCE_LEVEL=standard,GSS_CERTIFIED=false,GSS_TEST_SUITE_VERSION=0.2.0"
+  --set-env-vars "GSS_PROVIDER_ENDPOINT=https://${SERVICE_NAME}-$(echo ${GCP_REGION} | tr - _)-$(gcloud config get-value project).a.run.app/v1,GSS_PROVIDER_HOST=0.0.0.0,GSS_PROVIDER_PORT=8080,GSS_COMPLIANCE_LEVEL=standard,GSS_CERTIFIED=false,GSS_TEST_SUITE_VERSION=0.2.1"
 ```
 
 After deploy, Cloud Run prints the HTTPS URL (for example `https://gss-provider-xxxxx-ew.a.run.app`).
@@ -53,10 +59,10 @@ curl -s "${SERVICE_URL}/v1/describe"
 
 ## 7) Custom domain (optional)
 
-To expose `api.globassupportstandard.com`:
+To expose `api.globalsupportstandard.com`:
 
 1. Open Cloud Run service -> **Manage Custom Domains**
-2. Map `api.globassupportstandard.com` to the service
+2. Map `api.globalsupportstandard.com` to the service
 3. Add DNS records shown by Google (usually CNAME)
 4. Wait for certificate provisioning
 

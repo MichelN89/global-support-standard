@@ -40,7 +40,7 @@ def create_shopify_app(
         admin_token=cfg.admin_token,
         api_version=cfg.api_version,
     )
-    app = FastAPI(title="GSS Shopify Webshop Provider", version="0.1.0")
+    app = FastAPI(title="GSS Shopify Webshop Provider", version="0.2.1")
     verification_store: dict[str, dict[str, Any]] = {}
 
     def _normalize_email(value: str | None) -> str:
