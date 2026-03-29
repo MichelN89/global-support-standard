@@ -44,9 +44,9 @@ flowchart LR
 | `src/gss_core/envelope.py` | Uniform success/error response formatting |
 | `src/gss_provider/app.py` | HTTP route definitions and endpoint wiring |
 | `src/gss_provider/auth.py` | Header validation and auth-context construction via adapter |
-| `src/gss_provider/mock_data.py` | Mock shop order/return datasets and helpers |
+| `src/gss_provider/mock_data.py` | Reference in-memory order/return datasets and helpers |
 | `src/gss_provider/contracts.py` | Stateless adapter contracts for auth/confirm/audit |
-| `src/gss_provider/mock_adapter.py` | In-memory test/example implementation of shop contracts |
+| `src/gss_provider/mock_adapter.py` | In-memory reference implementation of shop contracts |
 | `src/gss_provider/protocol_engine.py` | YAML protocol loading and rule evaluation |
 | `src/gss_provider/audit.py` | Audit event helpers delegating to adapter contracts |
 | `src/gss_cli/main.py` | CLI command parsing, auth persistence, HTTP transport |
@@ -82,10 +82,10 @@ Rule behavior in the reference implementation:
 
 ## Extension Points
 
-To evolve from the default demo adapter to production adapters:
+To evolve from the default reference adapter to production adapters:
 
 1. Implement webshop-specific production adapters (e.g., Redis/Postgres/IdP-backed) for auth/confirmation/audit contracts.
-2. Replace the local demo data adapter with platform adapters (Shopify, WooCommerce, custom).
+2. Replace the local reference data adapter with platform adapters (Shopify, WooCommerce, custom).
 3. Add richer protocol condition syntax (boolean ops, nested expressions, priorities).
 4. Implement rate limiting and scope-based authorization.
 5. Expand domains toward full standard coverage.

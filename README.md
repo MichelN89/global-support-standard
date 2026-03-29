@@ -52,7 +52,7 @@ This codebase currently ships an end-to-end production baseline:
 
 - Provider API with standardized response envelope
 - CLI with `gss <shop> <domain> <action>` routing
-- Local demo adapter/data layer
+- Local reference adapter/data layer
 - Protocol engine (YAML rules + context enrichment)
 - Security baseline:
   - Customer auth token flow
@@ -122,7 +122,7 @@ gss-shopify-provider
 ```
 
 See `webshop/shopify-test-store/README.md` for setup against your test store.
-The Shopify demo includes an agent-first auth flow (`auth verify-customer` -> `auth issue-token`) in addition to legacy dev login.
+The Shopify reference project includes an agent-first auth flow (`auth verify-customer` -> `auth issue-token`) in addition to legacy compatibility login.
 
 ## HTTP Endpoints
 
