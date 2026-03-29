@@ -72,7 +72,7 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --port 8080 \
-            --set-env-vars "GSS_PROVIDER_HOST=0.0.0.0,GSS_PROVIDER_PORT=8080,GSS_COMPLIANCE_LEVEL=standard,GSS_CERTIFIED=false,GSS_TEST_SUITE_VERSION=0.2.1"
+            --set-env-vars "GSS_PROVIDER_HOST=0.0.0.0,GSS_PROVIDER_PORT=8080,GSS_COMPLIANCE_LEVEL=standard,GSS_CERTIFIED=false,GSS_TEST_SUITE_VERSION=0.2.2"
 
       - name: Set runtime endpoint to deployed URL
         run: |

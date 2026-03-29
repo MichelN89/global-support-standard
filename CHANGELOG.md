@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-29
+
+### Added
+- Channel-aware command routing and response metadata (`meta.channel`) in the reference provider.
+- Auth menu extensions with `auth agent`, `auth verify-customer`, and `auth issue-token` flows.
+- CLI validation command: `gss validate <shop> --level basic|standard|complete`.
+
+### Changed
+- `describe` now supports auth-level visibility (`none | agent | customer`) with minimum unauth payload and conditional full metadata.
+- CLI and docs aligned to optional `--channel` and agent-first customer verification flow.
+
 ## [0.2.1] - 2026-03-28
 
 ### Added

@@ -45,7 +45,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --platform managed \
   --allow-unauthenticated \
   --port 8080 \
-  --set-env-vars "GSS_PROVIDER_ENDPOINT=https://${SERVICE_NAME}-$(echo ${GCP_REGION} | tr - _)-$(gcloud config get-value project).a.run.app/v1,GSS_PROVIDER_HOST=0.0.0.0,GSS_PROVIDER_PORT=8080,GSS_COMPLIANCE_LEVEL=standard,GSS_CERTIFIED=false,GSS_TEST_SUITE_VERSION=0.2.1"
+  --set-env-vars "GSS_PROVIDER_ENDPOINT=https://${SERVICE_NAME}-$(echo ${GCP_REGION} | tr - _)-$(gcloud config get-value project).a.run.app/v1,GSS_PROVIDER_HOST=0.0.0.0,GSS_PROVIDER_PORT=8080,GSS_COMPLIANCE_LEVEL=standard,GSS_CERTIFIED=false,GSS_TEST_SUITE_VERSION=0.2.2"
 ```
 
 After deploy, Cloud Run prints the HTTPS URL (for example `https://gss-provider-xxxxx-ew.a.run.app`).
