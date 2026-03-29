@@ -54,4 +54,4 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [0.1.0] - 2026-03-28
 
 ### Added
-- Initial GSS Python MVP with FastAPI provider, Typer CLI, protocol engine, tests, and docs.
+- Initial GSS Python release baseline with FastAPI provider, Typer CLI, protocol engine, tests, and docs.

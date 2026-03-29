@@ -48,6 +48,6 @@ gss validate coolblue.nl --level standard
 
 Use `gss --describe` for auto-discovery. Rules: always use protocols, always show confirmation summaries, never attempt critical-level actions, relay protocol messages verbatim.
 
-## Legacy login (dev-only)
+## Legacy login (compatibility only)
 
 `auth login` exists for local/dev compatibility. Production consumers should prefer `verify-customer` -> `issue-token`.

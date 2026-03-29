@@ -1,7 +1,7 @@
 # Global Support Standard (GSS)
 
 **Document Type:** Open Standard Specification & Development Briefing
-**Version:** 0.1 (Draft)
+**Version:** 1.0
 **Date:** 2026-03-28
 
 ---

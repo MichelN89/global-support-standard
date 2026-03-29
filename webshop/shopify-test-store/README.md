@@ -67,5 +67,5 @@ GSS_DEFAULT_ENDPOINT=http://127.0.0.1:8010/v1 gss your-store.myshopify.com order
 
 `ShopOwnedRuntimeAdapter` is intentionally local-dev. For production, replace it with your real webshop infrastructure (e.g. Redis/Postgres/KMS-backed auth + audit).
 Legacy `auth login` is available for development only. Production integrations should use `verify-customer` + `issue-token`.
-If the customer entered a wrong email and does not know `order_id`, this demo supports a phone recovery lookup path in `auth verify-customer --phone <number>`.
+If the customer entered a wrong email and does not know `order_id`, this reference setup supports a phone recovery lookup path in `auth verify-customer --phone <number>`.
 Read actions are guarded as well: `orders get` and `shipping track` validate `order_id` format and enforce customer ownership before returning data.
