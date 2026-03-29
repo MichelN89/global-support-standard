@@ -52,12 +52,17 @@ jobs:
             --location="${GCP_REGION}" \
             --description="GSS container images"
 
+      - name: Configure Docker auth for Artifact Registry
+        run: |
+          gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
       - name: Build and push image
         id: build
         run: |
           IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/gss-provider:${GITHUB_SHA}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
-          gcloud builds submit --tag "${IMAGE}" .
+          docker build -t "${IMAGE}" .
+          docker push "${IMAGE}"
 
       - name: Deploy Cloud Run service
         run: |
