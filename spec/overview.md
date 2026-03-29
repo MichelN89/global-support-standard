@@ -197,6 +197,66 @@ AI agents like Support Squad AI would use `api_key` — the tenant configures th
 
 Authorization scope design and adapter flexibility rules are defined in `docs/authorization-model.md`.
 
+### 2.5 Channels
+
+GSS providers MAY expose one or more sales/service channels (for example `web`, `marketplace-eu`, `email`).
+
+- Consumers MAY pass `channel` on domain commands.
+- Providers with a single channel SHOULD auto-resolve that channel.
+- Providers with multiple channels MUST either:
+  - resolve deterministically from request context (for example `order_id`), or
+  - return a validation error requiring explicit `channel`.
+- If a channel is resolved or used, providers SHOULD include `meta.channel` in the response envelope.
+
+### 2.6 Describe Auth Levels and Menu
+
+`GET /describe` supports auth-aware visibility:
+
+- `none`: unauthenticated caller receives minimum discovery payload (`shop`, `name`, `gss_version`, `auth_methods`, `endpoint`).
+- `agent`: trusted agent session can receive expanded metadata.
+- `customer`: customer-authenticated session can receive full metadata.
+
+Providers SHOULD publish an auth menu in `auth_methods` and metadata for:
+
+- `agent_key`
+- `oauth2`
+- `api_key`
+- `customer_verify`
+
+`auth login` remains available for backward compatibility but SHOULD be marked deprecated.
+
+### 2.7 Customer Verification Field Options
+
+Providers MAY support different verification combinations and SHOULD declare accepted combinations in describe metadata.
+
+Common fields:
+
+- `order_id`
+- `email`
+- `phone`
+- `postal_code`
+- `last_name`
+
+Verification and token issuance are two distinct steps:
+
+1. `auth verify-customer` -> returns `verification_id`
+2. `auth issue-token` -> exchanges `verification_id` for a short-lived customer token
+
+### 2.8 Compliance Model
+
+GSS uses RFC 2119 semantics:
+
+- **MUST**: required for conformant implementations.
+- **SHOULD**: strong recommendation; deviations should be documented.
+- **RECOMMENDED**: useful interoperability guidance with lower conformance impact.
+
+Providers SHOULD expose compliance metadata in describe, including:
+
+- `level` (`basic`, `standard`, `complete`)
+- `certified` (boolean)
+- `test_suite_version`
+- `responsibility_boundary`
+
 ---
 
 ## 3. Core Domains

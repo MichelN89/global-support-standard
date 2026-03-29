@@ -84,3 +84,30 @@ def test_cli_describe_warns_if_uncertified(monkeypatch, tmp_path: Path) -> None:
     res = runner.invoke(cli_main.app, ["mockshop.local", "describe"])
     assert res.exit_code == 0, res.output
     assert "not GSS certified" in res.stderr
+
+
+def test_cli_channel_flag_passed_to_provider(monkeypatch, tmp_path: Path) -> None:
+    client = TestClient(app)
+    _install_test_transport(monkeypatch, client)
+    monkeypatch.setattr(cli_main, "TOKEN_PATH", tmp_path / "tokens.json")
+    runner = CliRunner()
+    runner.invoke(cli_main.app, ["mockshop.local", "auth", "login", "--method", "api_key"])
+    res = runner.invoke(
+        cli_main.app,
+        ["mockshop.local", "shipping", "track", "--order-id", "ORD-1002", "--channel", "email"],
+    )
+    assert res.exit_code == 0, res.output
+    payload = json.loads(res.output)
+    assert payload["meta"]["channel"] == "email"
+
+
+def test_cli_validate_command(monkeypatch, tmp_path: Path) -> None:
+    client = TestClient(app)
+    _install_test_transport(monkeypatch, client)
+    monkeypatch.setattr(cli_main, "TOKEN_PATH", tmp_path / "tokens.json")
+    runner = CliRunner()
+    res = runner.invoke(cli_main.app, ["validate", "mockshop.local", "--level", "basic"])
+    assert res.exit_code == 0, res.output
+    payload = json.loads(res.output)
+    assert payload["shop"] == "mockshop.local"
+    assert payload["level"] == "basic"

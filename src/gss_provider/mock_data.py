@@ -4,10 +4,17 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
+CHANNELS: list[dict[str, str]] = [
+    {"id": "web", "name": "Web Store"},
+    {"id": "email", "name": "Email Assisted"},
+    {"id": "marketplace-eu", "name": "Marketplace EU"},
+]
+
 ORDERS: list[dict[str, Any]] = [
     {
         "id": "ORD-1001",
         "customer_id": "CUST-001",
+        "channel": "web",
         "status": "delivered",
         "created_at": "2026-03-20T10:00:00Z",
         "expected_delivery": "2026-03-24T12:00:00Z",
@@ -24,6 +31,7 @@ ORDERS: list[dict[str, Any]] = [
     {
         "id": "ORD-1002",
         "customer_id": "CUST-001",
+        "channel": "email",
         "status": "shipped",
         "created_at": "2026-03-25T10:00:00Z",
         "expected_delivery": "2026-03-29T12:00:00Z",
@@ -39,6 +47,7 @@ ORDERS: list[dict[str, Any]] = [
     {
         "id": "ORD-2001",
         "customer_id": "CUST-002",
+        "channel": "marketplace-eu",
         "status": "delivered",
         "created_at": "2026-03-10T10:00:00Z",
         "expected_delivery": "2026-03-15T12:00:00Z",
@@ -54,8 +63,15 @@ ORDERS: list[dict[str, Any]] = [
 ]
 
 
-def list_orders(customer_id: str, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+def list_orders(
+    customer_id: str,
+    status: str | None = None,
+    limit: int = 20,
+    channel: str | None = None,
+) -> list[dict[str, Any]]:
     rows = [deepcopy(o) for o in ORDERS if o["customer_id"] == customer_id]
+    if channel:
+        rows = [r for r in rows if r.get("channel") == channel]
     if status:
         rows = [r for r in rows if r["status"] == status]
     return rows[: max(1, min(limit, 100))]
@@ -71,6 +87,10 @@ def get_order(order_id: str) -> dict[str, Any] | None:
 def owns_order(customer_id: str, order_id: str) -> bool:
     order = get_order(order_id)
     return bool(order and order["customer_id"] == customer_id)
+
+
+def list_channels() -> list[dict[str, str]]:
+    return deepcopy(CHANNELS)
 
 
 def return_eligibility(order_id: str, item_id: str) -> dict[str, Any]:

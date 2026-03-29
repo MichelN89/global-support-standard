@@ -15,6 +15,7 @@ gss coolblue.nl describe
 ## Authenticate (Agent-first flow)
 
 ```bash
+gss coolblue.nl auth agent --key <trusted_agent_key>
 gss coolblue.nl auth verify-customer --order-id ORD-12345 --email customer@example.com
 gss coolblue.nl auth issue-token --verification-id <verification_id> --method api_key
 ```
@@ -29,12 +30,18 @@ gss coolblue.nl auth issue-token --verification-id <verification_id> --method ap
 ## Interact
 
 ```bash
-gss coolblue.nl orders list
-gss coolblue.nl orders get --id ORD-12345
-gss coolblue.nl shipping track --order-id ORD-12345
-gss coolblue.nl returns initiate --order-id ORD-12345 --item-id ITEM-001 --reason wrong_size
+gss coolblue.nl orders list --channel web
+gss coolblue.nl orders get --id ORD-12345 --channel web
+gss coolblue.nl shipping track --order-id ORD-12345 --channel web
+gss coolblue.nl returns initiate --order-id ORD-12345 --item-id ITEM-001 --reason wrong_size --channel web
 gss coolblue.nl returns confirm --token conf-xyz-789   # After customer agrees
 gss coolblue.nl protocols get --trigger "delivery-not-received" --context '{"order_id": "ORD-12345"}'
+```
+
+## Validate a Shop
+
+```bash
+gss validate coolblue.nl --level standard
 ```
 
 ## For AI Agents

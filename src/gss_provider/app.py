@@ -15,9 +15,13 @@ from fastapi.responses import JSONResponse
 from gss_core.envelope import fail, ok
 from gss_core.errors import GssError, err
 from gss_core.models import (
+    AgentAuthResponse,
+    AuthIssueTokenRequest,
     AuthLoginRequest,
     AuthorizationMetadata,
     ComplianceMetadata,
+    CustomerVerificationRequest,
+    CustomerVerificationResponse,
     OrdersListQuery,
     ProtocolGetRequest,
     ReturnsCheckEligibilityRequest,
@@ -26,10 +30,10 @@ from gss_core.models import (
 )
 from gss_core.security import validate_resource_id
 from gss_provider.audit import get_customer_audit, log_action
-from gss_provider.auth import redact_token, validate_headers
+from gss_provider.auth import detect_auth_state, redact_token, validate_headers
 from gss_provider.contracts import ShopRuntimeAdapter
 from gss_provider.mock_adapter import InMemoryShopAdapter
-from gss_provider.mock_data import get_order, list_orders, owns_order, return_eligibility
+from gss_provider.mock_data import get_order, list_channels, list_orders, owns_order, return_eligibility
 from gss_provider.protocol_engine import ProtocolEngine
 from gss_provider.settings import ProviderSettings, load_settings
 
@@ -101,6 +105,11 @@ def create_app(
     @app.get("/v1/describe")
     def describe_shop(request: Request) -> dict[str, Any]:
         request_id = getattr(request.state, "request_id", request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}"))
+        auth_state = detect_auth_state(
+            authorization=request.headers.get("Authorization"),
+            gss_agent_key=request.headers.get("GSS-Agent-Key"),
+        )
+        public_describe = False
         authorization = AuthorizationMetadata(
             gss_scopes_supported=[
                 "orders:read",
@@ -138,11 +147,20 @@ def create_app(
                 "Shop implementations own token issuance, persistence, and audit infrastructure."
             ),
         )
+        minimum_payload = {
+            "shop": "mockshop.local",
+            "name": "Mock Shop",
+            "gss_version": "1.0",
+            "auth_methods": ["agent_key", "customer_verify", "oauth2", "api_key"],
+            "endpoint": runtime_settings.endpoint,
+            "public_describe": public_describe,
+            "auth_state": auth_state,
+        }
+        if auth_state == "none" and not public_describe:
+            return ok(minimum_payload, request_id)
         return ok(
             {
-                "shop": "mockshop.local",
-                "name": "Mock Shop",
-                "gss_version": "1.0",
+                **minimum_payload,
                 "domains": [
                     "orders",
                     "shipping",
@@ -156,8 +174,22 @@ def create_app(
                     "protocols",
                     "auth",
                 ],
-                "auth_methods": ["oauth2", "api_key"],
-                "endpoint": runtime_settings.endpoint,
+                "channels": list_channels(),
+                "auth_methods_menu": {
+                    "agent_key": {"recommended": True, "deprecated": False},
+                    "customer_verify": {
+                        "recommended": True,
+                        "fields_supported": ["order_id", "email", "phone", "postal_code", "last_name"],
+                    },
+                    "oauth2": {"recommended": True, "deprecated": False},
+                    "api_key": {"recommended": True, "deprecated": False},
+                    "login": {"recommended": False, "deprecated": True},
+                },
+                "consumer_policies": {
+                    "requires_customer_auth_for_data": True,
+                    "minimum_token_ttl_seconds": 300,
+                    "recommend_channel_hint": True,
+                },
                 "authorization": authorization.model_dump(),
                 "compliance": compliance.model_dump(),
             },
@@ -246,7 +278,7 @@ def create_app(
                 "loyalty tier-benefits",
             ],
             "protocols": ["protocols get --trigger --context"],
-            "auth": ["auth login"],
+            "auth": ["auth agent --key", "auth verify-customer [...fields]", "auth issue-token --verification-id", "auth login (deprecated)"],
         }
         if domain not in catalog:
             raise err("DOMAIN_NOT_SUPPORTED", f"Domain '{domain}' is not supported", status_code=404)
@@ -267,8 +299,75 @@ def create_app(
                 "expires_in_seconds": issued.expires_in_seconds,
                 "customer_id": issued.customer_id,
                 "method": issued.method,
+                "deprecated": True,
             },
             request_id,
+        )
+
+    @app.post("/v1/auth/agent")
+    def auth_agent(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+        request_id = getattr(request.state, "request_id", request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}"))
+        key = str(payload.get("key", "")).strip()
+        if not key:
+            raise err("VALIDATION_ERROR", "Missing agent key", status_code=400, details={"field": "key"})
+        agent_info = runtime_adapter.authenticate_agent_key(key)
+        if not agent_info:
+            raise err("UNAUTHORIZED", "Invalid agent key", status_code=401)
+        scopes = list(agent_info.get("scopes", []))
+        token = runtime_adapter.issue_agent_token(
+            agent_id=str(agent_info.get("agent_id", "agent")),
+            ttl_seconds=runtime_settings.token_ttl_seconds,
+            scopes=scopes,
+        )
+        response = AgentAuthResponse(
+            access_token=token.access_token,
+            token_type=token.token_type,
+            expires_in_seconds=token.expires_in_seconds,
+            scopes=scopes,
+        )
+        return ok(response.model_dump(), request_id)
+
+    @app.post("/v1/auth/verify-customer")
+    def auth_verify_customer(payload: CustomerVerificationRequest, request: Request) -> dict[str, Any]:
+        request_id = getattr(request.state, "request_id", request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}"))
+        body = payload.model_dump(exclude_none=True)
+        if not body:
+            raise err("VALIDATION_ERROR", "Provide at least one verification field", status_code=400)
+        record = runtime_adapter.create_customer_verification(
+            payload=body,
+            ttl_seconds=runtime_settings.confirmation_ttl_seconds,
+        )
+        response = CustomerVerificationResponse(
+            verification_id=record.verification_id,
+            accepted_fields=record.accepted_fields,
+            expires_in_seconds=runtime_settings.confirmation_ttl_seconds,
+            channel=record.channel,
+            customer_hint=record.customer_hint,
+        )
+        return ok(response.model_dump(), request_id, channel=record.channel)
+
+    @app.post("/v1/auth/issue-token")
+    def auth_issue_token(payload: AuthIssueTokenRequest, request: Request) -> dict[str, Any]:
+        request_id = getattr(request.state, "request_id", request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}"))
+        verification = runtime_adapter.consume_customer_verification(verification_id=payload.verification_id)
+        if not verification:
+            raise err("INVALID_VERIFICATION", "Invalid or expired verification id", status_code=400)
+        issued = runtime_adapter.issue_token(
+            customer_id=verification.customer_id,
+            method=payload.method,
+            ttl_seconds=runtime_settings.token_ttl_seconds,
+        )
+        return ok(
+            {
+                "access_token": issued.access_token,
+                "token_type": issued.token_type,
+                "expires_in_seconds": issued.expires_in_seconds,
+                "customer_id": issued.customer_id,
+                "method": issued.method,
+                "verification_fields": verification.accepted_fields,
+            },
+            request_id,
+            channel=verification.channel,
         )
 
     def _ctx(
@@ -278,6 +377,7 @@ def create_app(
         consumer_type: str | None,
         version: str | None,
         request_id: str | None,
+        gss_agent_key: str | None = None,
     ):
         return validate_headers(
             adapter=runtime_adapter,
@@ -286,7 +386,31 @@ def create_app(
             consumer_type=consumer_type,
             gss_version=version,
             request_id=request_id,
+            gss_agent_key=gss_agent_key,
         )
+
+    def _resolve_channel(request: Request, payload: dict[str, Any] | None = None) -> str | None:
+        candidate = request.query_params.get("channel")
+        if not candidate:
+            candidate = request.headers.get("GSS-Channel")
+        if not candidate and payload:
+            value = payload.get("channel")
+            if isinstance(value, str) and value:
+                candidate = value
+        if not candidate:
+            return None
+        valid_channels = {row["id"] for row in list_channels()}
+        if candidate not in valid_channels:
+            raise err(
+                "CHANNEL_NOT_SUPPORTED",
+                f"Channel '{candidate}' is not supported",
+                status_code=400,
+                details={"supported_channels": sorted(valid_channels)},
+            )
+        return candidate
+
+    def _ok(data: Any, request_id: str, request: Request, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        return ok(data, request_id, channel=_resolve_channel(request, payload))
 
     def _json_dict(raw: str | None, *, field_name: str) -> dict[str, Any]:
         if raw is None:
@@ -382,8 +506,9 @@ def create_app(
             request_id=gss_request_id,
         )
         query = OrdersListQuery(status=status, since=since, limit=limit)
-        data = list_orders(auth.customer_id, status=query.status, limit=query.limit)
-        return ok(data, auth.request_id)
+        channel = _resolve_channel(request)
+        data = list_orders(auth.customer_id, status=query.status, limit=query.limit, channel=channel)
+        return _ok(data, auth.request_id, request)
 
 
     @app.get("/v1/orders/{order_id}")
@@ -407,7 +532,10 @@ def create_app(
         order = get_order(order_id)
         if not order or order["customer_id"] != auth.customer_id:
             raise err("FORBIDDEN", "Order does not belong to authenticated customer", status_code=403)
-        return ok(order, auth.request_id)
+        channel = _resolve_channel(request)
+        if channel and order.get("channel") != channel:
+            raise err("NOT_FOUND", "Order not found for provided channel", status_code=404)
+        return _ok(order, auth.request_id, request, payload=order)
 
     @app.post("/v1/orders/cancel")
     def orders_cancel(
@@ -506,6 +634,9 @@ def create_app(
         order = get_order(order_id)
         if not order or order["customer_id"] != auth.customer_id:
             raise err("FORBIDDEN", "Order does not belong to authenticated customer", status_code=403)
+        channel = _resolve_channel(request)
+        if channel and order.get("channel") != channel:
+            raise err("NOT_FOUND", "Order not found for provided channel", status_code=404)
         return ok(
             {
                 "order_id": order_id,
@@ -513,8 +644,10 @@ def create_app(
                 "tracking_number": order["shipping"]["tracking_number"],
                 "last_event": order["shipping"]["last_event"],
                 "status": order["status"],
+                "channel": order.get("channel"),
             },
             auth.request_id,
+            channel=channel or order.get("channel"),
         )
 
     @app.post("/v1/shipping/report-issue")
@@ -624,7 +757,11 @@ def create_app(
         )
         if not owns_order(auth.customer_id, payload.order_id):
             raise err("FORBIDDEN", "Order does not belong to authenticated customer", status_code=403)
-        return ok(return_eligibility(payload.order_id, payload.item_id), auth.request_id)
+        channel = _resolve_channel(request, payload.model_dump(exclude_none=True))
+        order = get_order(payload.order_id)
+        if channel and order and order.get("channel") != channel:
+            raise err("NOT_FOUND", "Order not found for provided channel", status_code=404)
+        return ok(return_eligibility(payload.order_id, payload.item_id), auth.request_id, channel=channel or (order or {}).get("channel"))
 
 
     @app.post("/v1/returns/initiate")
@@ -646,6 +783,7 @@ def create_app(
         )
         if not owns_order(auth.customer_id, payload.order_id):
             raise err("FORBIDDEN", "Order does not belong to authenticated customer", status_code=403)
+        channel = _resolve_channel(request, payload.model_dump(exclude_none=True))
 
         if auth.consumer_type.value == "ai_agent" and payload.reason == "change-email":
             raise err("CONSUMER_TYPE_BLOCKED", "Action blocked for ai_agent", status_code=403)
@@ -655,6 +793,8 @@ def create_app(
             raise err("NOT_ELIGIBLE", "Return request is not eligible", status_code=400, details=eligibility)
 
         order = get_order(payload.order_id)
+        if channel and order and order.get("channel") != channel:
+            raise err("NOT_FOUND", "Order not found for provided channel", status_code=404)
         item = next(i for i in (order or {}).get("items", []) if i["id"] == payload.item_id)
         confirmation = runtime_adapter.create_confirmation(
             customer_id=auth.customer_id,
@@ -688,6 +828,7 @@ def create_app(
                 "expires_at": confirmation.expires_at.isoformat(),
             },
             auth.request_id,
+            channel=channel or (order or {}).get("channel"),
         )
 
 
@@ -950,6 +1091,7 @@ def create_app(
             version=gss_version,
             request_id=gss_request_id,
         )
+        requested_channel = _resolve_channel(request, payload.context)
         data = protocol_engine.get(payload.trigger, payload.context)
         log_action(
             runtime_adapter,
@@ -963,7 +1105,7 @@ def create_app(
             result="ok",
             protocol_used=data["protocol_used"],
         )
-        return ok(data, auth.request_id)
+        return ok(data, auth.request_id, channel=requested_channel)
 
     @app.get("/v1/products/{product_id}")
     def products_get(

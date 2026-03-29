@@ -26,11 +26,19 @@ def test_describe_shop() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
+    assert payload["data"]["auth_state"] == "none"
+    assert "domains" not in payload["data"]
+
+
+def test_describe_shop_with_agent_header_returns_full_metadata() -> None:
+    client = TestClient(app)
+    response = client.get("/v1/describe", headers={"GSS-Agent-Key": "agent-dev-key"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["data"]["auth_state"] == "agent"
     assert "orders" in payload["data"]["domains"]
-    assert "authorization" in payload["data"]
-    assert "gss_scopes_supported" in payload["data"]["authorization"]
-    assert "compliance" in payload["data"]
-    assert "certified" in payload["data"]["compliance"]
+    assert "channels" in payload["data"]
+    assert "consumer_policies" in payload["data"]
 
 
 def test_orders_for_authenticated_customer() -> None:
@@ -42,6 +50,32 @@ def test_orders_for_authenticated_customer() -> None:
     payload = response.json()
     assert payload["status"] == "ok"
     assert len(payload["data"]) >= 1
+
+
+def test_auth_verify_then_issue_token() -> None:
+    client = TestClient(app)
+    verify = client.post(
+        "/v1/auth/verify-customer",
+        json={"order_id": "ORD-1001", "email": "cust@example.com", "channel": "web"},
+    )
+    assert verify.status_code == 200
+    verification_id = verify.json()["data"]["verification_id"]
+    assert verify.json()["meta"]["channel"] == "web"
+
+    issue = client.post("/v1/auth/issue-token", json={"verification_id": verification_id, "method": "api_key"})
+    assert issue.status_code == 200
+    payload = issue.json()["data"]
+    assert payload["access_token"].startswith("tok-")
+    assert payload["customer_id"] == "CUST-001"
+
+
+def test_auth_agent_success_and_failure() -> None:
+    client = TestClient(app)
+    bad = client.post("/v1/auth/agent", json={"key": "wrong"})
+    assert bad.status_code == 401
+    good = client.post("/v1/auth/agent", json={"key": "agent-dev-key"})
+    assert good.status_code == 200
+    assert good.json()["data"]["access_token"].startswith("agt-")
 
 
 def test_forbidden_cross_customer_order_access() -> None:
@@ -67,6 +101,19 @@ def test_invalid_order_id_rejected_for_get_and_tracking() -> None:
     bad_track = client.get("/v1/shipping/track/ORD$1001", headers=headers)
     assert bad_track.status_code == 400
     assert bad_track.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_channel_routing_and_wrong_channel_behavior() -> None:
+    client = TestClient(app)
+    auth = client.post("/v1/auth/login", json={"method": "api_key", "customer_id": "CUST-001"}).json()
+    token = auth["data"]["access_token"]
+    headers = _auth_headers(token)
+    headers["GSS-Channel"] = "email"
+    ok_track = client.get("/v1/shipping/track/ORD-1002", headers=headers)
+    assert ok_track.status_code == 200
+    assert ok_track.json()["meta"]["channel"] == "email"
+    wrong_channel = client.get("/v1/orders/ORD-1001", headers=headers)
+    assert wrong_channel.status_code == 404
 
 
 def test_returns_initiate_then_confirm() -> None:

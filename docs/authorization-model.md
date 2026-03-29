@@ -104,6 +104,30 @@ Notes:
 - `scope_mapping_hints` is informative. Providers may omit sensitive internals.
 - Internal permission model is adapter-owned and can vary by platform.
 
+## Auth Menu Model
+
+Providers SHOULD expose an auth menu in `describe` so consumers can choose a supported flow at runtime:
+
+- `agent_key`: trusted SaaS/agent integration bootstrap.
+- `customer_verify`: verify customer attributes first, then exchange verification id for customer token.
+- `oauth2`: browser-based customer consent flow.
+- `api_key`: customer-managed long-lived credential, exchanged or scoped by provider policy.
+- `login` (deprecated): legacy compatibility path.
+
+Recommended production flow for autonomous agents:
+
+1. `auth agent` (service-level trust bootstrap, optional per shop policy)
+2. `auth verify-customer` (customer proof using shop-configured fields)
+3. `auth issue-token` (short-lived customer token for domain commands)
+
+## Channel-Aware Authorization
+
+When channels are enabled, providers SHOULD scope verification and token use to channel context when possible.
+
+- Consumers MAY pass `--channel`.
+- Providers SHOULD reject invalid channels with explicit validation errors.
+- Providers SHOULD return `meta.channel` when channel was resolved or enforced.
+
 ## Error Behavior
 
 On insufficient scope:

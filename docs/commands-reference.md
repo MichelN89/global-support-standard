@@ -8,6 +8,10 @@ Command pattern:
 gss <shop> <domain> <action> [--flags]
 ```
 
+Optional for all domain commands:
+
+- `--channel <channel_id>`
+
 ## Orders (5)
 
 - `gss <shop> orders get --id <order_id>`
@@ -95,3 +99,14 @@ gss <shop> <domain> <action> [--flags]
 ## Protocols (1)
 
 - `gss <shop> protocols get --trigger <trigger> --context '<json_object>'`
+
+## Auth
+
+- `gss <shop> auth agent --key <trusted_agent_key>`
+- `gss <shop> auth verify-customer [--order-id <order_id>] [--email <email>] [--phone <phone>] [--channel <channel_id>]`
+- `gss <shop> auth issue-token --verification-id <verification_id> [--method <oauth2|api_key>]`
+- `gss <shop> auth login --method <oauth2|api_key> [--customer-id <id>]` (deprecated)
+
+## Validation
+
+- `gss validate <shop> [--level <basic|standard|complete>]`

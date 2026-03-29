@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
-from gss_provider.contracts import ConfirmationRecord, IssuedToken, ShopRuntimeAdapter
+from gss_provider.contracts import ConfirmationRecord, IssuedToken, ShopRuntimeAdapter, VerificationRecord
+from gss_provider.mock_data import get_order
 
 
 class InMemoryShopAdapter(ShopRuntimeAdapter):
@@ -17,6 +18,11 @@ class InMemoryShopAdapter(ShopRuntimeAdapter):
 
     def __init__(self) -> None:
         self._tokens: dict[str, tuple[str, datetime]] = {}
+        self._agent_tokens: dict[str, tuple[str, datetime]] = {}
+        self._agent_keys: dict[str, dict[str, Any]] = {
+            "agent-dev-key": {"agent_id": "agent-dev", "scopes": ["orders:read", "shipping:read", "returns:request"]}
+        }
+        self._verifications: dict[str, VerificationRecord] = {}
         self._confirmations: dict[str, ConfirmationRecord] = {}
         self._audit: list[dict[str, Any]] = []
 
@@ -41,6 +47,64 @@ class InMemoryShopAdapter(ShopRuntimeAdapter):
             del self._tokens[token]
             return None
         return customer_id
+
+    def authenticate_agent_key(self, key: str) -> dict[str, Any] | None:
+        return self._agent_keys.get(key)
+
+    def issue_agent_token(self, *, agent_id: str, ttl_seconds: int, scopes: list[str]) -> IssuedToken:
+        token = f"agt-{agent_id}-{uuid4().hex[:16]}"
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+        self._agent_tokens[token] = (agent_id, expires_at)
+        return IssuedToken(
+            access_token=token,
+            token_type="bearer",
+            expires_in_seconds=ttl_seconds,
+            customer_id=agent_id,
+            method="agent_key",
+        )
+
+    def resolve_agent(self, token: str) -> str | None:
+        row = self._agent_tokens.get(token)
+        if not row:
+            return None
+        agent_id, expires_at = row
+        if expires_at <= datetime.now(timezone.utc):
+            del self._agent_tokens[token]
+            return None
+        return agent_id
+
+    def create_customer_verification(self, *, payload: dict[str, Any], ttl_seconds: int) -> VerificationRecord:
+        order_id = payload.get("order_id")
+        email = payload.get("email")
+        phone = payload.get("phone")
+        order = get_order(str(order_id)) if order_id else None
+        if not order:
+            # fallback for compatibility with existing mock flow
+            customer_id = "CUST-001"
+        else:
+            customer_id = order["customer_id"]
+        verification_id = f"ver-{uuid4().hex[:16]}"
+        accepted_fields = [name for name in ("order_id", "email", "phone", "postal_code", "last_name") if payload.get(name)]
+        hint = str(email or phone or customer_id)
+        record = VerificationRecord(
+            verification_id=verification_id,
+            customer_id=customer_id,
+            expires_at=datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds),
+            accepted_fields=accepted_fields,
+            channel=payload.get("channel"),
+            customer_hint=hint[:4] + "***" if len(hint) > 4 else hint,
+        )
+        self._verifications[verification_id] = record
+        return record
+
+    def consume_customer_verification(self, *, verification_id: str) -> VerificationRecord | None:
+        record = self._verifications.get(verification_id)
+        if not record:
+            return None
+        del self._verifications[verification_id]
+        if record.expires_at <= datetime.now(timezone.utc):
+            return None
+        return record
 
     def create_confirmation(
         self,

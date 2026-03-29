@@ -41,6 +41,9 @@ class DescribeResponse(BaseModel):
     endpoint: str
     authorization: dict[str, Any] | None = None
     compliance: dict[str, Any] | None = None
+    channels: list[dict[str, Any]] = Field(default_factory=list)
+    consumer_policies: dict[str, Any] | None = None
+    public_describe: bool = False
 
 
 class ScopePolicy(BaseModel):
@@ -78,11 +81,37 @@ class AuthVerifyCustomerRequest(BaseModel):
     order_id: str | None = None
     email: str | None = None
     phone: str | None = None
+    channel: str | None = None
 
 
 class AuthIssueTokenRequest(BaseModel):
     verification_id: str
     method: str = Field(pattern=r"^(oauth2|api_key)$")
+
+
+class CustomerVerificationRequest(BaseModel):
+    order_id: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    postal_code: str | None = None
+    last_name: str | None = None
+    channel: str | None = None
+
+
+class CustomerVerificationResponse(BaseModel):
+    verification_id: str
+    accepted_fields: list[str]
+    expires_in_seconds: int
+    channel: str | None = None
+    customer_hint: str | None = None
+
+
+class AgentAuthResponse(BaseModel):
+    access_token: str
+    token_type: str
+    expires_in_seconds: int
+    auth_state: str = "agent"
+    scopes: list[str] = Field(default_factory=list)
 
 
 class OrdersListQuery(BaseModel):

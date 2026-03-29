@@ -26,6 +26,16 @@ class IssuedToken:
 
 
 @dataclass
+class VerificationRecord:
+    verification_id: str
+    customer_id: str
+    expires_at: datetime
+    accepted_fields: list[str]
+    channel: str | None = None
+    customer_hint: str | None = None
+
+
+@dataclass
 class ConfirmationRecord:
     token: str
     customer_id: str
@@ -37,6 +47,16 @@ class AuthStore(Protocol):
     def issue_token(self, *, customer_id: str, method: str, ttl_seconds: int) -> IssuedToken: ...
 
     def resolve_customer(self, token: str) -> str | None: ...
+
+    def authenticate_agent_key(self, key: str) -> dict[str, Any] | None: ...
+
+    def issue_agent_token(self, *, agent_id: str, ttl_seconds: int, scopes: list[str]) -> IssuedToken: ...
+
+    def resolve_agent(self, token: str) -> str | None: ...
+
+    def create_customer_verification(self, *, payload: dict[str, Any], ttl_seconds: int) -> VerificationRecord: ...
+
+    def consume_customer_verification(self, *, verification_id: str) -> VerificationRecord | None: ...
 
 
 class ConfirmationStore(Protocol):

@@ -7,6 +7,23 @@ from gss_core.models import ConsumerType
 from gss_provider.contracts import AuthContext, ShopRuntimeAdapter
 
 
+def detect_auth_state(
+    *,
+    authorization: str | None,
+    gss_agent_key: str | None,
+) -> str:
+    if gss_agent_key:
+        return "agent"
+    if not authorization or not authorization.startswith("Bearer "):
+        return "none"
+    token = authorization.replace("Bearer ", "", 1).strip()
+    if token.startswith("agt-"):
+        return "agent"
+    if token.startswith("tok-"):
+        return "customer"
+    return "customer"
+
+
 def parse_token(authorization: str | None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise err("UNAUTHORIZED", "Missing or invalid Authorization header", status_code=401)
@@ -24,7 +41,11 @@ def validate_headers(
     consumer_type: str | None,
     gss_version: str | None,
     request_id: str | None,
+    gss_agent_key: str | None = None,
 ) -> AuthContext:
+    auth_state = detect_auth_state(authorization=authorization, gss_agent_key=gss_agent_key)
+    if auth_state != "customer":
+        raise err("UNAUTHORIZED", "Customer authentication is required for this endpoint", status_code=401)
     token = parse_token(authorization)
     customer_id = adapter.resolve_customer(token)
     if not customer_id:

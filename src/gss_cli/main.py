@@ -8,6 +8,8 @@ from typing import Any
 import httpx
 import typer
 
+from gss_cli.validate import run_validate
+
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 TOKEN_PATH = Path.home() / ".gss" / "tokens.json"
 
@@ -64,16 +66,21 @@ def _parse_flags(args: list[str]) -> tuple[list[str], dict[str, Any]]:
     return positionals, flags
 
 
-def _headers(shop: str) -> dict[str, str]:
+def _headers(shop: str, channel: str | None = None) -> dict[str, str]:
     token = _token_for(shop)
     if not token:
-        raise typer.BadParameter(f"No auth token for {shop}. Run: gss {shop} auth login --method api_key")
-    return {
+        raise typer.BadParameter(
+            f"No auth token for {shop}. Run: gss {shop} auth verify-customer ... then gss {shop} auth issue-token ..."
+        )
+    headers = {
         "Authorization": f"Bearer {token}",
         "GSS-Consumer-Id": os.getenv("GSS_CONSUMER_ID", "support-squad-ai"),
         "GSS-Consumer-Type": os.getenv("GSS_CONSUMER_TYPE", "ai_agent"),
         "GSS-Version": "1.0",
     }
+    if channel:
+        headers["GSS-Channel"] = channel
+    return headers
 
 
 def _request(
@@ -109,7 +116,7 @@ def _warn_if_uncertified(describe_payload: dict[str, Any]) -> None:
     compliance = data.get("compliance")
     if not isinstance(compliance, dict):
         typer.echo(
-            "Warning: shop does not expose compliance metadata. Trust level unknown.",
+            "Warning: shop is not GSS certified (metadata missing).",
             err=True,
         )
         return
@@ -122,13 +129,37 @@ def _warn_if_uncertified(describe_payload: dict[str, Any]) -> None:
         )
 
 
+def _warn_consumer_risks(describe_payload: dict[str, Any]) -> None:
+    data = describe_payload.get("data", {})
+    if data.get("public_describe"):
+        typer.echo("Warning: shop exposes full describe metadata publicly.", err=True)
+    policies = data.get("consumer_policies")
+    if not isinstance(policies, dict):
+        typer.echo("Warning: missing consumer_policies metadata.", err=True)
+    compliance = data.get("compliance")
+    if not isinstance(compliance, dict) or not compliance.get("test_suite_version"):
+        typer.echo("Warning: missing test_suite_version metadata.", err=True)
+
+
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     add_help_option=True,
 )
 def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) -> None:
-    endpoint = _resolve_endpoint(shop)
     positionals, flags = _parse_flags(parts + list(ctx.args))
+    if shop == "validate":
+        if not positionals:
+            raise typer.BadParameter("Usage: gss validate <shop> --level basic|standard|complete")
+        target_shop = positionals[0]
+        endpoint = _resolve_endpoint(target_shop)
+        level = str(flags.get("level", "basic"))
+        if level not in {"basic", "standard", "complete"}:
+            raise typer.BadParameter("Validation level must be one of: basic, standard, complete")
+        _emit(run_validate(shop=target_shop, endpoint=endpoint, level=level, request_fn=_request))
+        return
+
+    endpoint = _resolve_endpoint(shop)
+    channel = str(flags["channel"]) if "channel" in flags else None
 
     if not positionals:
         raise typer.BadParameter("Expected command pattern: gss <shop> <domain> <action>")
@@ -136,6 +167,7 @@ def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) 
     if positionals[0] == "describe":
         describe_payload = _request(method="GET", endpoint=endpoint, path="/describe")
         _warn_if_uncertified(describe_payload)
+        _warn_consumer_risks(describe_payload)
         _emit(describe_payload)
         return
 
@@ -169,6 +201,8 @@ def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) 
             body["email"] = flags["email"]
         if "phone" in flags:
             body["phone"] = flags["phone"]
+        if "channel" in flags:
+            body["channel"] = flags["channel"]
         _emit(
             _request(
                 method="POST",
@@ -177,6 +211,11 @@ def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) 
                 body=body,
             )
         )
+        return
+
+    if domain == "auth" and action == "agent":
+        _required(flags, "key")
+        _emit(_request(method="POST", endpoint=endpoint, path="/auth/agent", body={"key": flags["key"]}))
         return
 
     if domain == "auth" and action == "issue-token":
@@ -201,7 +240,7 @@ def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) 
         _emit(_request(method="GET", endpoint=endpoint, path=f"/{domain}/describe"))
         return
 
-    headers = _headers(shop)
+    headers = _headers(shop, channel=channel)
 
     if domain == "orders":
         if action == "list":

@@ -71,6 +71,17 @@ def test_core_provider_validates_resource_identifiers() -> None:
     assert bad_tracking.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_describe_visibility_is_auth_state_dependent() -> None:
+    client = TestClient(create_app())
+    public_describe = client.get("/v1/describe")
+    assert public_describe.status_code == 200
+    assert "domains" not in public_describe.json()["data"]
+
+    agent_describe = client.get("/v1/describe", headers={"GSS-Agent-Key": "agent-dev-key"})
+    assert agent_describe.status_code == 200
+    assert "domains" in agent_describe.json()["data"]
+
+
 def test_shopify_provider_enforces_customer_ownership() -> None:
     client = TestClient(create_shopify_app(client=_FakeShopifyClient()))
     token = client.post("/v1/auth/login", json={"method": "api_key", "customer_id": "other@example.com"}).json()["data"]["access_token"]
