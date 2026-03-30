@@ -57,6 +57,26 @@ SERVICE_URL="$(gcloud run services describe "${SERVICE_NAME}" --region "${GCP_RE
 curl -s "${SERVICE_URL}/v1/describe"
 ```
 
+## 6b) Use this endpoint with the CLI
+
+The CLI defaults to `http://127.0.0.1:8000/v1` unless you override it.
+
+Set one of the following before running `gss` commands:
+
+```bash
+# Global default for all shops
+export GSS_DEFAULT_ENDPOINT="https://gss-provider-125211190390.europe-west4.run.app/v1"
+
+# Or shop-specific override (recommended when mixing endpoints)
+export GSS_SHOP_MOCKSHOP_LOCAL_ENDPOINT="https://gss-provider-125211190390.europe-west4.run.app/v1"
+```
+
+Then verify:
+
+```bash
+gss mockshop.local describe
+```
+
 ## 7) Custom domain (optional)
 
 To expose `api.globalsupportstandard.com`:

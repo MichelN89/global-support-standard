@@ -12,6 +12,14 @@ pip install global-support-standard
 gss coolblue.nl describe
 ```
 
+If your shop endpoint is hosted on Cloud Run, set the CLI endpoint first:
+
+```bash
+export GSS_DEFAULT_ENDPOINT="https://gss-provider-125211190390.europe-west4.run.app/v1"
+# optional shop-specific override:
+export GSS_SHOP_COOLBLUE_NL_ENDPOINT="https://gss-provider-125211190390.europe-west4.run.app/v1"
+```
+
 ## Authenticate (Agent-first flow)
 
 ```bash
