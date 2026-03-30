@@ -96,6 +96,14 @@ gss-provider
 
 Default endpoint: `http://127.0.0.1:8000/v1`
 
+If you use Cloud Run instead of local provider runtime, set:
+
+```bash
+export GSS_DEFAULT_ENDPOINT="https://gss-provider-125211190390.europe-west4.run.app/v1"
+# or shop-specific:
+export GSS_SHOP_MOCKSHOP_LOCAL_ENDPOINT="https://gss-provider-125211190390.europe-west4.run.app/v1"
+```
+
 ### 3) Run consumer flow
 
 ```bash
