@@ -348,6 +348,14 @@ def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) 
                 body["reason"] = flags["reason"]
             if "changes" in flags:
                 body["changes"] = flags["changes"]
+            if "refund" in flags:
+                body["refund"] = flags["refund"]
+            if "restock" in flags:
+                body["restock"] = flags["restock"]
+            if "confirm_token" in flags:
+                body["confirm_token"] = flags["confirm_token"]
+            if "confirmation_token" in flags:
+                body["confirm_token"] = flags["confirmation_token"]
             _emit(_request(method="POST", endpoint=endpoint, path=f"/orders/{action}", headers=headers, body=body))
             return
 
