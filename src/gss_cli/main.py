@@ -653,20 +653,6 @@ def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) 
         )
         return
 
-    # Generic runtime fallback for future/extended command paths.
-    # Keep support-hub delegated to the dedicated Support Hub CLI.
-    if domain and action and domain != "support-hub":
-        _emit(
-            _request(
-                method="POST",
-                endpoint=endpoint,
-                path=f"/{domain}/{action}",
-                headers=headers,
-                body=flags or None,
-            )
-        )
-        return
-
     raise typer.BadParameter(f"Unknown command path: {' '.join(positionals)}")
 
 
