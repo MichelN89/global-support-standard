@@ -69,6 +69,16 @@ def test_auth_verify_then_issue_token() -> None:
     assert payload["customer_id"] == "CUST-001"
 
 
+def test_auth_verify_customer_unknown_order_fails_closed() -> None:
+    client = TestClient(app)
+    verify = client.post(
+        "/v1/auth/verify-customer",
+        json={"order_id": "ORD-9999", "email": "cust@example.com"},
+    )
+    assert verify.status_code == 400
+    assert verify.json()["error"]["code"] == "VERIFICATION_FAILED"
+
+
 def test_auth_agent_success_and_failure() -> None:
     client = TestClient(app)
     bad = client.post("/v1/auth/agent", json={"key": "wrong"})
@@ -76,6 +86,30 @@ def test_auth_agent_success_and_failure() -> None:
     good = client.post("/v1/auth/agent", json={"key": "agent-dev-key"})
     assert good.status_code == 200
     assert good.json()["data"]["access_token"].startswith("agt-")
+
+
+def test_auth_agent_disabled_returns_clear_error() -> None:
+    test_app = create_app(
+        settings=ProviderSettings(
+            protocol_dir=Path.cwd() / "protocols",
+            endpoint="http://127.0.0.1:8000/v1",
+            host="127.0.0.1",
+            port=8000,
+            debug=False,
+            token_ttl_seconds=3600,
+            confirmation_ttl_seconds=900,
+            compliance_level="basic",
+            certified=False,
+            test_suite_version="unverified",
+            enable_legacy_login=True,
+            enable_agent_auth=False,
+        ),
+        adapter=InMemoryShopAdapter(),
+    )
+    client = TestClient(test_app)
+    disabled = client.post("/v1/auth/agent", json={"key": "agent-dev-key"})
+    assert disabled.status_code == 404
+    assert disabled.json()["error"]["code"] == "AGENT_AUTH_DISABLED"
 
 
 def test_forbidden_cross_customer_order_access() -> None:
@@ -114,6 +148,25 @@ def test_channel_routing_and_wrong_channel_behavior() -> None:
     assert ok_track.json()["meta"]["channel"] == "email"
     wrong_channel = client.get("/v1/orders/ORD-1001", headers=headers)
     assert wrong_channel.status_code == 404
+
+
+def test_orders_request_actions_return_expected_statuses() -> None:
+    client = TestClient(app)
+    auth = client.post("/v1/auth/login", json={"method": "api_key", "customer_id": "CUST-001"}).json()
+    token = auth["data"]["access_token"]
+    headers = _auth_headers(token)
+
+    cancel = client.post("/v1/orders/cancel", headers=headers, json={"id": "ORD-1001", "reason": "customer_request"})
+    assert cancel.status_code == 200
+    assert cancel.json()["data"]["status"] == "cancel_requested"
+
+    modify = client.post("/v1/orders/modify", headers=headers, json={"id": "ORD-1001", "changes": {"gift_wrap": True}})
+    assert modify.status_code == 200
+    assert modify.json()["data"]["status"] == "modification_requested"
+
+    reorder = client.post("/v1/orders/reorder", headers=headers, json={"id": "ORD-1001"})
+    assert reorder.status_code == 200
+    assert reorder.json()["data"]["status"] == "created"
 
 
 def test_returns_initiate_then_confirm() -> None:
@@ -197,6 +250,7 @@ def test_expired_token_rejected_with_short_ttl() -> None:
             compliance_level="basic",
             certified=False,
             test_suite_version="unverified",
+            enable_legacy_login=True,
         ),
         adapter=InMemoryShopAdapter(),
     )
@@ -220,6 +274,7 @@ def test_expired_confirmation_rejected_with_short_ttl() -> None:
             compliance_level="basic",
             certified=False,
             test_suite_version="unverified",
+            enable_legacy_login=True,
         ),
         adapter=InMemoryShopAdapter(),
     )
@@ -235,6 +290,93 @@ def test_expired_confirmation_rejected_with_short_ttl() -> None:
     confirm = client.post("/v1/returns/confirm", headers=headers, json={"token": confirmation_token})
     assert confirm.status_code == 400
     assert confirm.json()["error"]["code"] == "INVALID_CONFIRMATION_TOKEN"
+
+
+def test_legacy_login_can_be_disabled() -> None:
+    test_app = create_app(
+        settings=ProviderSettings(
+            protocol_dir=Path.cwd() / "protocols",
+            endpoint="http://127.0.0.1:8000/v1",
+            host="127.0.0.1",
+            port=8000,
+            debug=False,
+            token_ttl_seconds=3600,
+            confirmation_ttl_seconds=900,
+            compliance_level="basic",
+            certified=False,
+            test_suite_version="unverified",
+            enable_legacy_login=False,
+            enable_agent_auth=False,
+        ),
+        adapter=InMemoryShopAdapter(),
+    )
+    client = TestClient(test_app)
+    res = client.post("/v1/auth/login", json={"method": "api_key", "customer_id": "CUST-001"})
+    assert res.status_code == 410
+    assert res.json()["error"]["code"] == "LEGACY_AUTH_DISABLED"
+
+
+def test_scope_enforcement_blocks_missing_scope() -> None:
+    class ScopedAdapter(InMemoryShopAdapter):
+        def issue_token(self, *, customer_id: str, method: str, ttl_seconds: int) -> IssuedToken:
+            issued = super().issue_token(customer_id=customer_id, method=method, ttl_seconds=ttl_seconds)
+            row = self._tokens[issued.access_token]
+            self._tokens[issued.access_token] = (row[0], row[1], ["orders:read"])
+            return issued
+
+    test_app = create_app(
+        settings=ProviderSettings(
+            protocol_dir=Path.cwd() / "protocols",
+            endpoint="http://127.0.0.1:8000/v1",
+            host="127.0.0.1",
+            port=8000,
+            debug=False,
+            token_ttl_seconds=3600,
+            confirmation_ttl_seconds=900,
+            compliance_level="basic",
+            certified=False,
+            test_suite_version="unverified",
+            enable_legacy_login=True,
+            enable_agent_auth=False,
+        ),
+        adapter=ScopedAdapter(),
+    )
+    client = TestClient(test_app)
+    token = client.post("/v1/auth/login", json={"method": "api_key", "customer_id": "CUST-001"}).json()["data"]["access_token"]
+    res = client.post(
+        "/v1/account/update",
+        headers=_auth_headers(token),
+        json={"changes": {"phone": "+31600000000"}},
+    )
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "FORBIDDEN"
+
+
+def test_rate_limiting_applies_when_enabled() -> None:
+    test_app = create_app(
+        settings=ProviderSettings(
+            protocol_dir=Path.cwd() / "protocols",
+            endpoint="http://127.0.0.1:8000/v1",
+            host="127.0.0.1",
+            port=8000,
+            debug=False,
+            token_ttl_seconds=3600,
+            confirmation_ttl_seconds=900,
+            compliance_level="basic",
+            certified=False,
+            test_suite_version="unverified",
+            rate_limit_enabled=True,
+            rate_limit_window_seconds=60,
+            rate_limit_data_max_requests=1,
+            rate_limit_auth_max_requests=10,
+        ),
+        adapter=InMemoryShopAdapter(),
+    )
+    client = TestClient(test_app)
+    assert client.get("/v1/describe").status_code == 200
+    limited = client.get("/v1/describe")
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "RATE_LIMITED"
 
 
 def test_protocol_trigger_path_traversal_rejected() -> None:
@@ -293,6 +435,7 @@ def test_provider_uses_injected_shop_adapter_contracts() -> None:
             compliance_level="basic",
             certified=False,
             test_suite_version="unverified",
+            enable_legacy_login=True,
         ),
         adapter=adapter,
     )

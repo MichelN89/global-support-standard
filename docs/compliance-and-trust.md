@@ -19,6 +19,7 @@ GSS is a protocol standard and package ecosystem. It is not a centralized identi
 - confirmation-token persistence and replay protection
 - audit storage, retention, and legal compliance
 - infrastructure hardening and operational controls
+- browser CORS policy decisions (if browser clients are supported)
 
 ## Compliance Metadata
 
@@ -47,3 +48,9 @@ Consumers should treat missing or uncertified compliance metadata as a risk sign
 
 Adapter contract tests are provided under `tests/conformance/` to verify expected behavior at the package boundary.  
 Passing these tests does not replace production security audits.
+
+## Reference Runtime Defaults
+
+- Legacy login is disabled by default (`GSS_ENABLE_LEGACY_LOGIN=0`).
+- Agent auth issuance is disabled by default (`GSS_ENABLE_AGENT_AUTH=0`) unless explicitly enabled by the shop.
+- In-memory rate limiting is enabled by default (`GSS_RATE_LIMIT_ENABLED=1`) as a baseline guardrail.

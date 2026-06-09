@@ -18,6 +18,12 @@ class ProviderSettings:
     compliance_level: str
     certified: bool
     test_suite_version: str
+    enable_legacy_login: bool = False
+    enable_agent_auth: bool = False
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = 60
+    rate_limit_auth_max_requests: int = 30
+    rate_limit_data_max_requests: int = 120
 
 
 def _default_protocol_dir() -> Path:
@@ -41,4 +47,10 @@ def load_settings() -> ProviderSettings:
         compliance_level=os.getenv("GSS_COMPLIANCE_LEVEL", "basic"),
         certified=os.getenv("GSS_CERTIFIED", "false").lower() in {"1", "true", "yes"},
         test_suite_version=os.getenv("GSS_TEST_SUITE_VERSION", "unverified"),
+        enable_legacy_login=os.getenv("GSS_ENABLE_LEGACY_LOGIN", "0").lower() in {"1", "true", "yes"},
+        enable_agent_auth=os.getenv("GSS_ENABLE_AGENT_AUTH", "0").lower() in {"1", "true", "yes"},
+        rate_limit_enabled=os.getenv("GSS_RATE_LIMIT_ENABLED", "1").lower() in {"1", "true", "yes"},
+        rate_limit_window_seconds=int(os.getenv("GSS_RATE_LIMIT_WINDOW_SECONDS", "60")),
+        rate_limit_auth_max_requests=int(os.getenv("GSS_RATE_LIMIT_AUTH_MAX_REQUESTS", "30")),
+        rate_limit_data_max_requests=int(os.getenv("GSS_RATE_LIMIT_DATA_MAX_REQUESTS", "120")),
     )
