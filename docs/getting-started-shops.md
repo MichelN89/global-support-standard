@@ -30,6 +30,24 @@ class MyShopAdapter(ShopRuntimeAdapter):
     def resolve_customer(self, token: str) -> str | None:
         ...
 
+    def resolve_scopes(self, token: str) -> list[str]:
+        ...
+
+    def authenticate_agent_key(self, key: str) -> dict | None:
+        ...
+
+    def issue_agent_token(self, *, agent_id: str, ttl_seconds: int, scopes: list[str]) -> IssuedToken:
+        ...
+
+    def resolve_agent(self, token: str) -> str | None:
+        ...
+
+    def create_customer_verification(self, *, payload: dict, ttl_seconds: int):
+        ...
+
+    def consume_customer_verification(self, *, verification_id: str):
+        ...
+
     def create_confirmation(self, *, customer_id: str, payload: dict, ttl_seconds: int) -> ConfirmationRecord:
         ...
 
@@ -93,6 +111,12 @@ pytest --cov=src --cov-report=term-missing --cov-fail-under=80
 ```bash
 docker build -t myshop-gss . && docker run -p 8080:8080 --env-file .env myshop-gss
 ```
+
+Recommended runtime defaults:
+
+- `GSS_ENABLE_LEGACY_LOGIN=0`
+- `GSS_ENABLE_AGENT_AUTH=0` (enable only when your adapter enforces agent policies)
+- `GSS_RATE_LIMIT_ENABLED=1`
 
 Make your shop discoverable (required for CLI users without manual env vars):
 

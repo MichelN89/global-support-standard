@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Capability-split adapter contracts (`CustomerAuthStore`, `AgentAuthStore`, `VerificationStore`) and scope resolution support.
+- Baseline in-memory security controls module with scope mapping and rate limiting helpers.
+- Security exceptions register (`docs/security-exceptions.md`) to track temporary CVE audit overrides.
+
+### Changed
+- Legacy `/v1/auth/login` is now disabled by default (`GSS_ENABLE_LEGACY_LOGIN=0`) with explicit migration error response.
+- Agent auth issuance is disabled by default (`GSS_ENABLE_AGENT_AUTH=0`) and only advertised when enabled.
+- Provider middleware now enforces token scope checks for protected routes and applies baseline rate limiting.
+- Mock customer verification now fails closed for unknown/missing order context (no hardcoded customer fallback).
+- Coverage exclusions were reduced for order mutation handlers, with dedicated tests added for `orders cancel|modify|reorder`.
+
 ## [0.2.3] - 2026-03-31
 
 ### Added

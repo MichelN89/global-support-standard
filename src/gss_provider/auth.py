@@ -50,6 +50,7 @@ def validate_headers(
     customer_id = adapter.resolve_customer(token)
     if not customer_id:
         raise err("UNAUTHORIZED", "Unknown or expired token", status_code=401)
+    scopes = adapter.resolve_scopes(token)
     if not consumer_id or not consumer_type or not gss_version:
         raise err(
             "MISSING_HEADERS",
@@ -70,6 +71,7 @@ def validate_headers(
         consumer_id=consumer_id,
         consumer_type=c_type,
         request_id=rid,
+        scopes=scopes,
     )
 
 

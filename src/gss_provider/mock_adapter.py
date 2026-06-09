@@ -17,8 +17,8 @@ class InMemoryShopAdapter(ShopRuntimeAdapter):
     """
 
     def __init__(self) -> None:
-        self._tokens: dict[str, tuple[str, datetime]] = {}
-        self._agent_tokens: dict[str, tuple[str, datetime]] = {}
+        self._tokens: dict[str, tuple[str, datetime, list[str]]] = {}
+        self._agent_tokens: dict[str, tuple[str, datetime, list[str]]] = {}
         self._agent_keys: dict[str, dict[str, Any]] = {
             "agent-dev-key": {"agent_id": "agent-dev", "scopes": ["orders:read", "shipping:read", "returns:request"]}
         }
@@ -29,24 +29,58 @@ class InMemoryShopAdapter(ShopRuntimeAdapter):
     def issue_token(self, *, customer_id: str, method: str, ttl_seconds: int) -> IssuedToken:
         token = f"tok-{customer_id}-{uuid4().hex[:16]}"
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
-        self._tokens[token] = (customer_id, expires_at)
+        scopes = [
+            "orders:read",
+            "shipping:read",
+            "returns:read",
+            "returns:request",
+            "protocols:read",
+            "account:read",
+            "payments:read",
+            "subscriptions:read",
+            "loyalty:read",
+            "orders:request",
+            "account:request",
+            "payments:request",
+            "subscriptions:request",
+            "loyalty:request",
+        ]
+        self._tokens[token] = (customer_id, expires_at, scopes)
         return IssuedToken(
             access_token=token,
             token_type="bearer",
             expires_in_seconds=ttl_seconds,
             customer_id=customer_id,
             method=method,
+            scopes=scopes,
         )
 
     def resolve_customer(self, token: str) -> str | None:
         row = self._tokens.get(token)
         if not row:
             return None
-        customer_id, expires_at = row
+        customer_id, expires_at, _ = row
         if expires_at <= datetime.now(timezone.utc):
             del self._tokens[token]
             return None
         return customer_id
+
+    def resolve_scopes(self, token: str) -> list[str]:
+        row = self._tokens.get(token)
+        if row:
+            _, expires_at, scopes = row
+            if expires_at <= datetime.now(timezone.utc):
+                del self._tokens[token]
+                return []
+            return list(scopes)
+        agent_row = self._agent_tokens.get(token)
+        if not agent_row:
+            return []
+        _, expires_at, scopes = agent_row
+        if expires_at <= datetime.now(timezone.utc):
+            del self._agent_tokens[token]
+            return []
+        return list(scopes)
 
     def authenticate_agent_key(self, key: str) -> dict[str, Any] | None:
         return self._agent_keys.get(key)
@@ -54,20 +88,21 @@ class InMemoryShopAdapter(ShopRuntimeAdapter):
     def issue_agent_token(self, *, agent_id: str, ttl_seconds: int, scopes: list[str]) -> IssuedToken:
         token = f"agt-{agent_id}-{uuid4().hex[:16]}"
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
-        self._agent_tokens[token] = (agent_id, expires_at)
+        self._agent_tokens[token] = (agent_id, expires_at, list(scopes))
         return IssuedToken(
             access_token=token,
             token_type="bearer",
             expires_in_seconds=ttl_seconds,
             customer_id=agent_id,
             method="agent_key",
+            scopes=list(scopes),
         )
 
     def resolve_agent(self, token: str) -> str | None:
         row = self._agent_tokens.get(token)
         if not row:
             return None
-        agent_id, expires_at = row
+        agent_id, expires_at, _ = row
         if expires_at <= datetime.now(timezone.utc):
             del self._agent_tokens[token]
             return None
@@ -78,11 +113,9 @@ class InMemoryShopAdapter(ShopRuntimeAdapter):
         email = payload.get("email")
         phone = payload.get("phone")
         order = get_order(str(order_id)) if order_id else None
-        if not order:
-            # fallback for compatibility with existing mock flow
-            customer_id = "CUST-001"
-        else:
-            customer_id = order["customer_id"]
+        if not order_id or not order:
+            raise ValueError("ORDER_NOT_FOUND")
+        customer_id = order["customer_id"]
         verification_id = f"ver-{uuid4().hex[:16]}"
         accepted_fields = [name for name in ("order_id", "email", "phone", "postal_code", "last_name") if payload.get(name)]
         hint = str(email or phone or customer_id)

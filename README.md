@@ -48,7 +48,7 @@ Today these flows are reimplemented per shop and routed through human agents. GS
 
 ## Reference Implementation Scope
 
-This codebase currently ships an end-to-end production baseline:
+This codebase currently ships an end-to-end reference runtime baseline:
 
 - Provider API with standardized response envelope
 - CLI with `gss <shop> <domain> <action>` routing
@@ -57,7 +57,7 @@ This codebase currently ships an end-to-end production baseline:
 - Security baseline:
   - Customer auth token flow
   - Required `GSS-Consumer-*` headers
-  - Two-step request execution (`returns initiate` -> `returns confirm`)
+  - Two-step request execution for returns (`returns initiate` -> `returns confirm`)
   - Append-only audit log records
 - Stateless core boundary:
   - Framework defines contracts and orchestration
@@ -108,7 +108,8 @@ export GSS_SHOP_MOCKSHOP_LOCAL_ENDPOINT="https://gss-provider-125211190390.europ
 
 ```bash
 gss mockshop.local describe
-gss mockshop.local auth login --method api_key --customer-id CUST-001
+gss mockshop.local auth verify-customer --order-id ORD-1001 --email cust@example.com
+gss mockshop.local auth issue-token --verification-id <verification_id> --method api_key
 gss mockshop.local orders list
 gss mockshop.local orders get --id ORD-1001
 gss mockshop.local shipping track --order-id ORD-1001
@@ -158,7 +159,7 @@ The Shopify reference project includes an agent-first auth flow (`auth verify-cu
   - `GSS-Consumer-Id`
   - `GSS-Consumer-Type`
   - `GSS-Version`
-- `request` actions are two-step by design (issue confirmation token, then confirm)
+- In the reference runtime, two-step confirmation is enforced for returns (`returns initiate` -> `returns confirm`)
 - Authorization is customer-scoped and domain actions enforce ownership checks
 - Request/action events are recorded to the audit log
 - Trust signaling:
@@ -189,6 +190,9 @@ For production deployments, minimum baseline should include:
   - branch protection on `main`
   - required checks: lint, tests matrix, coverage, package-check, dependency-audit
   - CODEOWNERS and PR template enabled
+- CORS posture:
+  - reference runtime defaults to server-to-server integrations (no CORS middleware enabled)
+  - browser-facing deployments should add explicit allowlist CORS policy at the edge or app layer
 
 ## Trust Boundary
 
@@ -224,6 +228,7 @@ Current test coverage includes:
 - Registry security spec: `docs/registry-security.md`
 - Registry conformance checklist: `docs/registry-conformance-checklist.md`
 - Discovery setup guide: `docs/discovery-setup.md`
+- Security exceptions register: `docs/security-exceptions.md`
 - Conformance schema: `schemas/conformance/agent-delegation-checklist.json`
 - Shopify webshop project: `webshop/shopify-test-store/README.md`
 - Shop onboarding: `docs/getting-started-shops.md`

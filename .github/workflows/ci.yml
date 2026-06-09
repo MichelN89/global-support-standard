@@ -115,4 +115,6 @@ jobs:
           pip install pip-audit
 
       - name: Run dependency vulnerability audit
-        run: pip-audit --ignore-vuln CVE-2026-4539
+        run: |
+          echo "Using temporary security exception CVE-2026-4539 (tracking: docs/security-exceptions.md)"
+          pip-audit --ignore-vuln CVE-2026-4539

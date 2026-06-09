@@ -35,6 +35,7 @@ from gss_provider.contracts import ShopRuntimeAdapter
 from gss_provider.mock_adapter import InMemoryShopAdapter
 from gss_provider.mock_data import get_order, list_channels, list_orders, owns_order, return_eligibility
 from gss_provider.protocol_engine import ProtocolEngine
+from gss_provider.security_controls import InMemoryRateLimiter, required_scope
 from gss_provider.settings import ProviderSettings, load_settings
 
 LOGGER = logging.getLogger("gss_provider")
@@ -60,6 +61,7 @@ def create_app(
     payment_methods: dict[str, list[dict[str, Any]]] = {}
     subscriptions: dict[str, list[dict[str, Any]]] = {}
     loyalty_ledgers: dict[str, list[dict[str, Any]]] = {}
+    rate_limiter = InMemoryRateLimiter()
     product_catalog: list[dict[str, Any]] = [
         {"id": "PRD-100", "name": "Wireless Headphones", "category": "audio", "stock": 8, "warranty_months": 24},
         {"id": "PRD-101", "name": "Mechanical Keyboard", "category": "peripherals", "stock": 5, "warranty_months": 24},
@@ -71,7 +73,45 @@ def create_app(
     async def request_logging_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
         request_id = request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}")
         request.state.request_id = request_id
+        client_host = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown").split(",")[0].strip()
+        if runtime_settings.rate_limit_enabled:
+            bucket = "auth" if request.url.path.startswith("/v1/auth/") else "data"
+            max_requests = (
+                max(1, runtime_settings.rate_limit_auth_max_requests)
+                if bucket == "auth"
+                else max(1, runtime_settings.rate_limit_data_max_requests)
+            )
+            window_seconds = max(1, runtime_settings.rate_limit_window_seconds)
+            if not rate_limiter.allow(
+                bucket=bucket,
+                client_id=client_host,
+                window_seconds=window_seconds,
+                max_requests=max_requests,
+            ):
+                return JSONResponse(
+                    status_code=429,
+                    content=fail(
+                        "RATE_LIMITED",
+                        "Too many requests. Please retry shortly.",
+                        request_id,
+                        {"bucket": bucket, "window_seconds": window_seconds, "max_requests": max_requests},
+                    ),
+                )
         LOGGER.info("request start %s %s request_id=%s", request.method, request.url.path, request_id)
+        token_header = request.headers.get("Authorization")
+        if token_header and token_header.startswith("Bearer ") and not request.url.path.startswith("/v1/auth/"):
+            token = token_header.replace("Bearer ", "", 1).strip()
+            token_scopes = set(runtime_adapter.resolve_scopes(token))
+            required_token_scope = required_scope(request.url.path, request.method)
+            if required_token_scope and token_scopes and required_token_scope not in token_scopes:
+                return JSONResponse(
+                    status_code=403,
+                    content=fail(
+                        "FORBIDDEN",
+                        f"Token does not grant required scope '{required_token_scope}'",
+                        request_id,
+                    ),
+                )
         response = await call_next(request)
         response.headers["GSS-Request-Id"] = request_id
         LOGGER.info("request end %s request_id=%s", response.status_code, request_id)
@@ -151,17 +191,20 @@ def create_app(
             "shop": "mockshop.local",
             "name": "Mock Shop",
             "gss_version": "1.0",
-            "auth_methods": ["agent_key", "customer_verify", "oauth2", "api_key"],
+            "auth_methods": ["customer_verify", "oauth2", "api_key"],
             "endpoint": runtime_settings.endpoint,
             "public_describe": public_describe,
             "auth_state": auth_state,
         }
+        if runtime_settings.enable_agent_auth:
+            minimum_payload["auth_methods"] = ["agent_key", *minimum_payload["auth_methods"]]
+        if runtime_settings.enable_legacy_login:
+            minimum_payload["auth_methods"] = [*minimum_payload["auth_methods"], "login"]
         if auth_state == "none" and not public_describe:
             return ok(minimum_payload, request_id)
-        return ok(
-            {
-                **minimum_payload,
-                "domains": [
+        full_payload = {
+            **minimum_payload,
+            "domains": [
                     "orders",
                     "shipping",
                     "returns",
@@ -173,28 +216,29 @@ def create_app(
                     "loyalty",
                     "protocols",
                     "auth",
-                ],
-                "channels": list_channels(),
-                "auth_methods_menu": {
-                    "agent_key": {"recommended": True, "deprecated": False},
-                    "customer_verify": {
-                        "recommended": True,
-                        "fields_supported": ["order_id", "email", "phone", "postal_code", "last_name"],
-                    },
-                    "oauth2": {"recommended": True, "deprecated": False},
-                    "api_key": {"recommended": True, "deprecated": False},
-                    "login": {"recommended": False, "deprecated": True},
+            ],
+            "channels": list_channels(),
+            "auth_methods_menu": {
+                "customer_verify": {
+                    "recommended": True,
+                    "fields_supported": ["order_id", "email", "phone", "postal_code", "last_name"],
                 },
-                "consumer_policies": {
-                    "requires_customer_auth_for_data": True,
-                    "minimum_token_ttl_seconds": 300,
-                    "recommend_channel_hint": True,
-                },
-                "authorization": authorization.model_dump(),
-                "compliance": compliance.model_dump(),
+                "oauth2": {"recommended": True, "deprecated": False},
+                "api_key": {"recommended": True, "deprecated": False},
             },
-            request_id,
-        )
+            "consumer_policies": {
+                "requires_customer_auth_for_data": True,
+                "minimum_token_ttl_seconds": 300,
+                "recommend_channel_hint": True,
+            },
+            "authorization": authorization.model_dump(),
+            "compliance": compliance.model_dump(),
+        }
+        if runtime_settings.enable_agent_auth:
+            full_payload["auth_methods_menu"]["agent_key"] = {"recommended": True, "deprecated": False}
+        if runtime_settings.enable_legacy_login:
+            full_payload["auth_methods_menu"]["login"] = {"recommended": False, "deprecated": True}
+        return ok(full_payload, request_id)
 
     @app.get("/v1/{domain}/describe")
     def describe_domain(domain: str, request: Request) -> dict[str, Any]:
@@ -278,8 +322,12 @@ def create_app(
                 "loyalty tier-benefits",
             ],
             "protocols": ["protocols get --trigger --context"],
-            "auth": ["auth agent --key", "auth verify-customer [...fields]", "auth issue-token --verification-id", "auth login (deprecated)"],
+            "auth": ["auth verify-customer [...fields]", "auth issue-token --verification-id"],
         }
+        if runtime_settings.enable_agent_auth:
+            catalog["auth"].insert(0, "auth agent --key")
+        if runtime_settings.enable_legacy_login:
+            catalog["auth"].append("auth login (deprecated)")
         if domain not in catalog:
             raise err("DOMAIN_NOT_SUPPORTED", f"Domain '{domain}' is not supported", status_code=404)
         return ok({"domain": domain, "commands": catalog[domain]}, request_id)
@@ -287,6 +335,12 @@ def create_app(
     @app.post("/v1/auth/login")
     def auth_login(payload: AuthLoginRequest, request: Request) -> dict[str, Any]:
         request_id = getattr(request.state, "request_id", request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}"))
+        if not runtime_settings.enable_legacy_login:
+            raise err(
+                "LEGACY_AUTH_DISABLED",
+                "Legacy login is disabled. Use auth verify-customer followed by auth issue-token.",
+                status_code=410,
+            )
         issued = runtime_adapter.issue_token(
             customer_id=payload.customer_id,
             method=payload.method,
@@ -307,6 +361,12 @@ def create_app(
     @app.post("/v1/auth/agent")
     def auth_agent(payload: dict[str, Any], request: Request) -> dict[str, Any]:
         request_id = getattr(request.state, "request_id", request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}"))
+        if not runtime_settings.enable_agent_auth:
+            raise err(
+                "AGENT_AUTH_DISABLED",
+                "Agent auth is disabled for this deployment.",
+                status_code=404,
+            )
         key = str(payload.get("key", "")).strip()
         if not key:
             raise err("VALIDATION_ERROR", "Missing agent key", status_code=400, details={"field": "key"})
@@ -333,10 +393,13 @@ def create_app(
         body = payload.model_dump(exclude_none=True)
         if not body:
             raise err("VALIDATION_ERROR", "Provide at least one verification field", status_code=400)
-        record = runtime_adapter.create_customer_verification(
-            payload=body,
-            ttl_seconds=runtime_settings.confirmation_ttl_seconds,
-        )
+        try:
+            record = runtime_adapter.create_customer_verification(
+                payload=body,
+                ttl_seconds=runtime_settings.confirmation_ttl_seconds,
+            )
+        except ValueError as exc:
+            raise err("VERIFICATION_FAILED", "Unable to verify customer with supplied data", status_code=400) from exc
         response = CustomerVerificationResponse(
             verification_id=record.verification_id,
             accepted_fields=record.accepted_fields,

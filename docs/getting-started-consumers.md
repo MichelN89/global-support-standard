@@ -56,7 +56,16 @@ gss validate coolblue.nl --level standard
 
 ## For AI Agents
 
-Use `gss --describe` for auto-discovery. Rules: always use protocols, always show confirmation summaries, never attempt critical-level actions, relay protocol messages verbatim.
+Use `gss <shop> describe` for shop discovery and `gss <shop> <domain> describe` for domain-specific capability discovery.
+
+For data-bearing domain calls (`orders`, `shipping`, `returns`, `account`, `payments`, etc.), first obtain a customer token via:
+
+1. `gss <shop> auth verify-customer ...`
+2. `gss <shop> auth issue-token --verification-id <id> --method api_key`
+
+`auth agent` can be used for agent identity where supported, but it is not a replacement for the customer verification/token flow required by protected customer data endpoints.
+
+Rules: always use protocols, always show confirmation summaries, never attempt critical-level actions, relay protocol messages verbatim.
 
 ## Legacy login (compatibility only)
 
