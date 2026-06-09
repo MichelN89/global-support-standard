@@ -12,6 +12,15 @@ from fastapi import FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from gss_core.actions import (
+    ActionDef,
+    actions_for_domain,
+    ai_agent_blocked_actions,
+    scope_for,
+)
+from gss_core.actions import (
+    domains as registry_domains,
+)
 from gss_core.envelope import fail, ok
 from gss_core.errors import GssError, err
 from gss_core.models import (
@@ -43,6 +52,29 @@ if not LOGGER.handlers:
     logging.basicConfig(level=logging.INFO)
 
 
+def _action_enabled(action: ActionDef, settings: ProviderSettings) -> bool:
+    """An action is hidden when its gating setting (if any) is disabled."""
+    if action.enabled_setting is None:
+        return True
+    return bool(getattr(settings, action.enabled_setting, False))
+
+
+def _action_describe(action: ActionDef) -> dict[str, Any]:
+    """Affordance metadata for a single action, as surfaced in describe."""
+    return {
+        "name": f"{action.domain} {action.action}",
+        "command": action.command,
+        "purpose": action.purpose,
+        "risk": action.risk.value,
+        "requires_confirmation": action.requires_confirmation,
+        "confirmation_style": action.confirmation_style,
+        "scope": scope_for(action),
+        "prerequisites": list(action.prerequisites),
+        "next": list(action.next),
+        "consumer_block": list(action.consumer_block),
+    }
+
+
 def create_app(
     *,
     settings: ProviderSettings | None = None,
@@ -61,13 +93,8 @@ def create_app(
     payment_methods: dict[str, list[dict[str, Any]]] = {}
     subscriptions: dict[str, list[dict[str, Any]]] = {}
     loyalty_ledgers: dict[str, list[dict[str, Any]]] = {}
+    handoff_records: dict[str, dict[str, Any]] = {}
     rate_limiter = InMemoryRateLimiter()
-    product_catalog: list[dict[str, Any]] = [
-        {"id": "PRD-100", "name": "Wireless Headphones", "category": "audio", "stock": 8, "warranty_months": 24},
-        {"id": "PRD-101", "name": "Mechanical Keyboard", "category": "peripherals", "stock": 5, "warranty_months": 24},
-        {"id": "PRD-102", "name": "USB-C Cable", "category": "accessories", "stock": 42, "warranty_months": 12},
-        {"id": "PRD-103", "name": "Smart Lamp", "category": "home", "stock": 0, "warranty_months": 12},
-    ]
 
     @app.middleware("http")
     async def request_logging_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
@@ -204,19 +231,24 @@ def create_app(
             return ok(minimum_payload, request_id)
         full_payload = {
             **minimum_payload,
-            "domains": [
-                    "orders",
-                    "shipping",
-                    "returns",
-                    "refunds",
-                    "products",
-                    "account",
-                    "payments",
-                    "subscriptions",
-                    "loyalty",
-                    "protocols",
-                    "auth",
-            ],
+            # Domains are generated from the shared action registry so they can
+            # never disagree with the actions the provider actually serves.
+            "domains": registry_domains(),
+            "intent": {
+                "summary": runtime_settings.intent_summary,
+                "in_scope": list(runtime_settings.intent_in_scope),
+                "out_of_scope": list(runtime_settings.intent_out_of_scope),
+                "first_steps": [
+                    "GET /v1/describe to discover capabilities and this intent",
+                    "auth verify-customer -> auth issue-token to obtain a customer token",
+                    "then call domain actions; consult protocols get for the right workflow",
+                    "support escalate when self-service cannot resolve the request",
+                ],
+                "consumer_constraints": {
+                    "requires_customer_auth_for_data": True,
+                    "ai_agent_blocked_actions": ai_agent_blocked_actions(),
+                },
+            },
             "channels": list_channels(),
             "auth_methods_menu": {
                 "customer_verify": {
@@ -243,94 +275,19 @@ def create_app(
     @app.get("/v1/{domain}/describe")
     def describe_domain(domain: str, request: Request) -> dict[str, Any]:
         request_id = getattr(request.state, "request_id", request.headers.get("GSS-Request-Id", f"req-{uuid4().hex}"))
-        catalog = {
-            "orders": [
-                "orders get --id",
-                "orders list [--status] [--since] [--limit]",
-                "orders cancel --id [--reason]",
-                "orders modify --id --changes",
-                "orders reorder --id",
-            ],
-            "returns": [
-                "returns check-eligibility --order-id --item-id",
-                "returns initiate --order-id --item-id --reason [--option]",
-                "returns status --return-id",
-                "returns list [--status] [--since]",
-                "returns cancel --return-id",
-                "returns dispute --return-id --reason",
-                "returns request-return-back --return-id",
-                "returns accept-partial --return-id --option",
-            ],
-            "refunds": [
-                "refunds status --refund-id",
-                "refunds list [--since]",
-            ],
-            "shipping": [
-                "shipping track --order-id",
-                "shipping report-issue --order-id --issue",
-                "shipping change-address --order-id --address",
-                "shipping request-redelivery --order-id [--date]",
-                "shipping delivery-preferences --set",
-            ],
-            "products": [
-                "products get --id",
-                "products search --query [--category] [--limit]",
-                "products check-availability --id [--postal-code]",
-                "products warranty-status --id --purchase-date",
-                "products notify-restock --id --email",
-                "products compare --ids",
-            ],
-            "account": [
-                "account get",
-                "account update --changes",
-                "account addresses list",
-                "account addresses add --address",
-                "account addresses update --id --changes",
-                "account addresses delete --id",
-                "account change-email --new-email",
-                "account change-email-recover --new-email",
-                "account payment-methods list",
-                "account payment-methods add --method",
-                "account payment-methods delete --id",
-                "account delete-request",
-                "account export-data",
-                "account audit-log [--since] [--limit]",
-            ],
-            "payments": [
-                "payments get --order-id",
-                "payments invoice --order-id",
-                "payments dispute --order-id --reason",
-                "payments retry --order-id",
-                "payments list [--since] [--status]",
-            ],
-            "subscriptions": [
-                "subscriptions list",
-                "subscriptions get --id",
-                "subscriptions pause --id [--until]",
-                "subscriptions resume --id",
-                "subscriptions cancel --id [--reason]",
-                "subscriptions modify --id --changes",
-                "subscriptions skip-next --id",
-                "subscriptions change-frequency --id --cycle",
-            ],
-            "loyalty": [
-                "loyalty balance",
-                "loyalty history [--since] [--limit]",
-                "loyalty redeem --points --order-id",
-                "loyalty rewards list",
-                "loyalty rewards redeem --reward-id",
-                "loyalty tier-benefits",
-            ],
-            "protocols": ["protocols get --trigger --context"],
-            "auth": ["auth verify-customer [...fields]", "auth issue-token --verification-id"],
-        }
-        if runtime_settings.enable_agent_auth:
-            catalog["auth"].insert(0, "auth agent --key")
-        if runtime_settings.enable_legacy_login:
-            catalog["auth"].append("auth login (deprecated)")
-        if domain not in catalog:
+        domain_actions = [a for a in actions_for_domain(domain) if _action_enabled(a, runtime_settings)]
+        if not domain_actions:
             raise err("DOMAIN_NOT_SUPPORTED", f"Domain '{domain}' is not supported", status_code=404)
-        return ok({"domain": domain, "commands": catalog[domain]}, request_id)
+        return ok(
+            {
+                "domain": domain,
+                # Enriched, machine-readable affordance objects (intent, risk, scope, ordering).
+                "commands": [_action_describe(a) for a in domain_actions],
+                # Backward-compatible flat command surface (unchanged contract).
+                "command_strings": [a.command for a in domain_actions],
+            },
+            request_id,
+        )
 
     @app.post("/v1/auth/login")
     def auth_login(payload: AuthLoginRequest, request: Request) -> dict[str, Any]:
@@ -801,6 +758,57 @@ def create_app(
         return ok({"status": "preferences_saved", "preferences": payload.get("set")}, auth.request_id)
 
 
+    @app.post("/v1/support/escalate")
+    def support_escalate(
+        payload: dict[str, Any],
+        request: Request,
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        consumer_id: str | None = Header(default=None, alias="GSS-Consumer-Id"),
+        consumer_type: str | None = Header(default=None, alias="GSS-Consumer-Type"),
+        gss_version: str | None = Header(default=None, alias="GSS-Version"),
+        gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
+    ) -> dict[str, Any]:
+        auth = _ctx(
+            authorization=authorization,
+            consumer_id=consumer_id,
+            consumer_type=consumer_type,
+            version=gss_version,
+            request_id=gss_request_id,
+        )
+        reason = str(payload.get("reason", "")).strip()
+        if not reason:
+            raise err("VALIDATION_ERROR", "Provide a reason for the escalation", status_code=400, details={"field": "reason"})
+        handoff_id = f"handoff-{uuid4().hex[:16]}"
+        # Reference implementation: persist a handoff record and audit it. A shop's
+        # adapter is responsible for routing the handoff to its human support system.
+        record = {
+            "handoff_id": handoff_id,
+            "customer_id": auth.customer_id,
+            "consumer_id": auth.consumer_id,
+            "consumer_type": auth.consumer_type.value,
+            "reason": reason,
+            "context": payload.get("context"),
+            "status": "open",
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        handoff_records[handoff_id] = record
+        log_action(
+            runtime_adapter,
+            customer_id=auth.customer_id,
+            consumer_id=auth.consumer_id,
+            consumer_type=auth.consumer_type.value,
+            consumer_ip=request.client.host if request.client else "unknown",
+            action="support escalate",
+            action_level="request",
+            parameters={"reason": reason, "context": payload.get("context")},
+            result="handoff_created",
+        )
+        return ok(
+            {"handoff_id": handoff_id, "status": "handoff_created", "reason": reason},
+            auth.request_id,
+        )
+
+
     @app.post("/v1/returns/check-eligibility")
     def returns_check_eligibility(
         payload: ReturnsCheckEligibilityRequest,
@@ -1169,159 +1177,6 @@ def create_app(
             protocol_used=data["protocol_used"],
         )
         return ok(data, auth.request_id, channel=requested_channel)
-
-    @app.get("/v1/products/{product_id}")
-    def products_get(
-        product_id: str,
-        request: Request,
-        authorization: str | None = Header(default=None, alias="Authorization"),
-        consumer_id: str | None = Header(default=None, alias="GSS-Consumer-Id"),
-        consumer_type: str | None = Header(default=None, alias="GSS-Consumer-Type"),
-        gss_version: str | None = Header(default=None, alias="GSS-Version"),
-        gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
-    ) -> dict[str, Any]:
-        validate_resource_id(field_name="product_id", value=product_id)
-        auth = _ctx(
-            authorization=authorization,
-            consumer_id=consumer_id,
-            consumer_type=consumer_type,
-            version=gss_version,
-            request_id=gss_request_id,
-        )
-        product = next((p for p in product_catalog if p["id"] == product_id), None)
-        if not product:
-            raise err("NOT_FOUND", "Product not found", status_code=404)
-        return ok(deepcopy(product), auth.request_id)
-
-    @app.get("/v1/products/search")
-    def products_search(
-        request: Request,
-        query: str,
-        category: str | None = None,
-        limit: int = 20,
-        authorization: str | None = Header(default=None, alias="Authorization"),
-        consumer_id: str | None = Header(default=None, alias="GSS-Consumer-Id"),
-        consumer_type: str | None = Header(default=None, alias="GSS-Consumer-Type"),
-        gss_version: str | None = Header(default=None, alias="GSS-Version"),
-        gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
-    ) -> dict[str, Any]:
-        auth = _ctx(
-            authorization=authorization,
-            consumer_id=consumer_id,
-            consumer_type=consumer_type,
-            version=gss_version,
-            request_id=gss_request_id,
-        )
-        rows = [p for p in product_catalog if query.lower() in p["name"].lower()]
-        if category:
-            rows = [p for p in rows if p["category"] == category]
-        rows = rows[: max(1, min(limit, 100))]
-        return ok(deepcopy(rows), auth.request_id)
-
-    @app.get("/v1/products/check-availability/{product_id}")
-    def products_check_availability(
-        product_id: str,
-        request: Request,
-        postal_code: str | None = None,
-        authorization: str | None = Header(default=None, alias="Authorization"),
-        consumer_id: str | None = Header(default=None, alias="GSS-Consumer-Id"),
-        consumer_type: str | None = Header(default=None, alias="GSS-Consumer-Type"),
-        gss_version: str | None = Header(default=None, alias="GSS-Version"),
-        gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
-    ) -> dict[str, Any]:
-        validate_resource_id(field_name="product_id", value=product_id)
-        auth = _ctx(
-            authorization=authorization,
-            consumer_id=consumer_id,
-            consumer_type=consumer_type,
-            version=gss_version,
-            request_id=gss_request_id,
-        )
-        product = next((p for p in product_catalog if p["id"] == product_id), None)
-        if not product:
-            raise err("NOT_FOUND", "Product not found", status_code=404)
-        return ok(
-            {
-                "product_id": product_id,
-                "available": product["stock"] > 0,
-                "stock": product["stock"],
-                "postal_code": postal_code,
-            },
-            auth.request_id,
-        )
-
-    @app.get("/v1/products/warranty-status/{product_id}")
-    def products_warranty_status(
-        product_id: str,
-        request: Request,
-        purchase_date: str,
-        authorization: str | None = Header(default=None, alias="Authorization"),
-        consumer_id: str | None = Header(default=None, alias="GSS-Consumer-Id"),
-        consumer_type: str | None = Header(default=None, alias="GSS-Consumer-Type"),
-        gss_version: str | None = Header(default=None, alias="GSS-Version"),
-        gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
-    ) -> dict[str, Any]:
-        validate_resource_id(field_name="product_id", value=product_id)
-        auth = _ctx(
-            authorization=authorization,
-            consumer_id=consumer_id,
-            consumer_type=consumer_type,
-            version=gss_version,
-            request_id=gss_request_id,
-        )
-        product = next((p for p in product_catalog if p["id"] == product_id), None)
-        if not product:
-            raise err("NOT_FOUND", "Product not found", status_code=404)
-        return ok(
-            {
-                "product_id": product_id,
-                "purchase_date": purchase_date,
-                "warranty_months": product["warranty_months"],
-                "status": "active",
-            },
-            auth.request_id,
-        )
-
-    @app.post("/v1/products/notify-restock")
-    def products_notify_restock(
-        payload: dict[str, Any],
-        request: Request,
-        authorization: str | None = Header(default=None, alias="Authorization"),
-        consumer_id: str | None = Header(default=None, alias="GSS-Consumer-Id"),
-        consumer_type: str | None = Header(default=None, alias="GSS-Consumer-Type"),
-        gss_version: str | None = Header(default=None, alias="GSS-Version"),
-        gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
-    ) -> dict[str, Any]:
-        auth = _ctx(
-            authorization=authorization,
-            consumer_id=consumer_id,
-            consumer_type=consumer_type,
-            version=gss_version,
-            request_id=gss_request_id,
-        )
-        product_id = str(payload.get("id", ""))
-        validate_resource_id(field_name="id", value=product_id)
-        return ok({"product_id": product_id, "email": payload.get("email"), "status": "subscription_created"}, auth.request_id)
-
-    @app.get("/v1/products/compare")
-    def products_compare(
-        request: Request,
-        ids: str,
-        authorization: str | None = Header(default=None, alias="Authorization"),
-        consumer_id: str | None = Header(default=None, alias="GSS-Consumer-Id"),
-        consumer_type: str | None = Header(default=None, alias="GSS-Consumer-Type"),
-        gss_version: str | None = Header(default=None, alias="GSS-Version"),
-        gss_request_id: str | None = Header(default=None, alias="GSS-Request-Id"),
-    ) -> dict[str, Any]:
-        auth = _ctx(
-            authorization=authorization,
-            consumer_id=consumer_id,
-            consumer_type=consumer_type,
-            version=gss_version,
-            request_id=gss_request_id,
-        )
-        requested = [x.strip() for x in ids.split(",") if x.strip()]
-        return ok({"ids": requested, "items": [p for p in product_catalog if p["id"] in requested]}, auth.request_id)
 
     @app.get("/v1/account")
     def account_get(

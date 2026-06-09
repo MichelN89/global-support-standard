@@ -40,7 +40,7 @@ $ gss amazon.com describe
 {
   "shop": "amazon.com",
   "version": "1.0",
-  "domains": ["orders", "returns", "shipping", "products", "account", "payments"],
+  "domains": ["orders", "returns", "shipping", "account", "payments"],
   "auth_methods": ["oauth2", "api_key"]
 }
 
@@ -140,7 +140,7 @@ $ gss coolblue.nl describe
   "shop": "coolblue.nl",
   "name": "Coolblue",
   "gss_version": "1.0",
-  "domains": ["orders", "returns", "shipping", "products", "account", "payments"],
+  "domains": ["orders", "returns", "shipping", "account", "payments"],
   "auth_methods": ["oauth2"],
   "endpoint": "https://gss.coolblue.nl/v1"
 }
@@ -630,46 +630,13 @@ gss <shop> shipping delivery-preferences --set <json>
 
 ---
 
-### 3.4 Products
+### 3.4 Products (out of scope)
 
-**Required commands:**
-
-```
-gss <shop> products get --id <product_id>
-```
-
-```json
-{
-  "id": "SKU-ABC",
-  "name": "Wireless Headphones XM5",
-  "description": "Noise-cancelling wireless headphones...",
-  "price": {"amount": 79.99, "currency": "EUR"},
-  "availability": "in_stock",
-  "estimated_delivery": "2026-03-26",
-  "variants": [
-    {"id": "SKU-ABC-BLK", "color": "Black", "availability": "in_stock"},
-    {"id": "SKU-ABC-WHT", "color": "White", "availability": "out_of_stock"}
-  ],
-  "warranty": {
-    "duration_months": 24,
-    "type": "manufacturer",
-    "claim_url": "https://shop.com/warranty"
-  }
-}
-```
-
-```
-gss <shop> products search --query <text> [--category <cat>] [--limit <n>]
-```
-
-**Optional commands:**
-
-```
-gss <shop> products check-availability --id <id> [--postal-code <code>]
-gss <shop> products warranty-status --id <id> --purchase-date <date>
-gss <shop> products notify-restock --id <id> --email <email>
-gss <shop> products compare --ids <id1,id2,id3>
-```
+Product browsing, search, comparison and merchandising are **out of scope** for GSS.
+GSS handles post-purchase customer support for an *authenticated* customer — not
+shopping or discovery. Questions about an owned product (e.g. warranty or
+availability for a reorder) are answered through the `orders` and `returns`
+domains, not a dedicated products domain.
 
 ---
 
@@ -1125,8 +1092,6 @@ Every command has a fixed action level that determines what authentication is re
 | shipping      | track                         | `read`     |                                            |
 | shipping      | report-issue                  | `request`  |                                            |
 | shipping      | change-address                | `request`  |                                            |
-| products      | get, search, check-availability | `read`   |                                            |
-| products      | notify-restock                | `read`     | Only subscribes to notification            |
 | account       | get, addresses list           | `read`     |                                            |
 | account       | update (name, phone, prefs)   | `request`  | Cannot change email via this command       |
 | account       | addresses add/update          | `request`  |                                            |
@@ -1150,6 +1115,7 @@ Every command has a fixed action level that determines what authentication is re
 | subscriptions | modify, change-frequency      | `request`  |                                            |
 | loyalty       | balance, history, tier-benefits | `read`   |                                            |
 | loyalty       | redeem, rewards redeem        | `request`  | Two-step confirmation required             |
+| support       | escalate                      | `request`  | Hand off to human support with context     |
 | protocols     | get                           | `read`     | Reading a protocol is always safe          |
 
 ---

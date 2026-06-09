@@ -24,6 +24,31 @@ class ProviderSettings:
     rate_limit_window_seconds: int = 60
     rate_limit_auth_max_requests: int = 30
     rate_limit_data_max_requests: int = 120
+    intent_summary: str = (
+        "GSS handles post-purchase customer support self-service on behalf of an "
+        "authenticated customer."
+    )
+    intent_in_scope: tuple[str, ...] = (
+        "order status and history",
+        "returns, refunds and exchanges",
+        "shipping and delivery issues",
+        "account, subscription and loyalty management",
+        "reading the shop's resolution protocols",
+        "escalating to a human when self-service cannot resolve the request",
+    )
+    intent_out_of_scope: tuple[str, ...] = (
+        "browsing, search or product recommendations",
+        "placing new orders or shopping",
+        "payments not tied to an existing order",
+        "actions requiring human-only identity proof",
+    )
+
+
+def _csv_env(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
 def _default_protocol_dir() -> Path:
@@ -53,4 +78,7 @@ def load_settings() -> ProviderSettings:
         rate_limit_window_seconds=int(os.getenv("GSS_RATE_LIMIT_WINDOW_SECONDS", "60")),
         rate_limit_auth_max_requests=int(os.getenv("GSS_RATE_LIMIT_AUTH_MAX_REQUESTS", "30")),
         rate_limit_data_max_requests=int(os.getenv("GSS_RATE_LIMIT_DATA_MAX_REQUESTS", "120")),
+        intent_summary=os.getenv("GSS_INTENT_SUMMARY", ProviderSettings.intent_summary),
+        intent_in_scope=_csv_env("GSS_INTENT_IN_SCOPE", ProviderSettings.intent_in_scope),
+        intent_out_of_scope=_csv_env("GSS_INTENT_OUT_OF_SCOPE", ProviderSettings.intent_out_of_scope),
     )

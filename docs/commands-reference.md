@@ -42,14 +42,9 @@ Optional for all domain commands:
 - `gss <shop> shipping request-redelivery --order-id <order_id> [--date <yyyy-mm-dd>]`
 - `gss <shop> shipping delivery-preferences --set '<json_or_text>'`
 
-## Products (6)
+## Support (1)
 
-- `gss <shop> products get --id <product_id>`
-- `gss <shop> products search --query <query> [--category <category>] [--limit <n>]`
-- `gss <shop> products check-availability --id <product_id> [--postal-code <postal_code>]`
-- `gss <shop> products warranty-status --id <product_id> --purchase-date <yyyy-mm-dd>`
-- `gss <shop> products notify-restock --id <product_id> --email <email>`
-- `gss <shop> products compare --ids <id1,id2,id3>`
+- `gss <shop> support escalate --reason <reason> [--context '<json_or_text>']`
 
 ## Account (13)
 
