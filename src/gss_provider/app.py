@@ -15,7 +15,6 @@ from fastapi.responses import JSONResponse
 from gss_core.actions import (
     ActionDef,
     actions_for_domain,
-    ai_agent_blocked_actions,
     scope_for,
 )
 from gss_core.actions import (
@@ -23,6 +22,7 @@ from gss_core.actions import (
 )
 from gss_core.envelope import fail, ok
 from gss_core.errors import GssError, err
+from gss_core.intent import default_shop_intent
 from gss_core.models import (
     AgentAuthResponse,
     AuthIssueTokenRequest,
@@ -234,21 +234,13 @@ def create_app(
             # Domains are generated from the shared action registry so they can
             # never disagree with the actions the provider actually serves.
             "domains": registry_domains(),
-            "intent": {
-                "summary": runtime_settings.intent_summary,
-                "in_scope": list(runtime_settings.intent_in_scope),
-                "out_of_scope": list(runtime_settings.intent_out_of_scope),
-                "first_steps": [
-                    "GET /v1/describe to discover capabilities and this intent",
-                    "auth verify-customer -> auth issue-token to obtain a customer token",
-                    "then call domain actions; consult protocols get for the right workflow",
-                    "support escalate when self-service cannot resolve the request",
-                ],
-                "consumer_constraints": {
-                    "requires_customer_auth_for_data": True,
-                    "ai_agent_blocked_actions": ai_agent_blocked_actions(),
-                },
-            },
+            # Intent is built from the shared gss_core definition (the same source
+            # the managed backend uses), with the shop's human-readable overrides.
+            "intent": default_shop_intent(
+                summary=runtime_settings.intent_summary,
+                in_scope=runtime_settings.intent_in_scope,
+                out_of_scope=runtime_settings.intent_out_of_scope,
+            ),
             "channels": list_channels(),
             "auth_methods_menu": {
                 "customer_verify": {

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
+from gss_core.intent import DEFAULT_IN_SCOPE, DEFAULT_OUT_OF_SCOPE, DEFAULT_SUMMARY
+
 
 @dataclass(frozen=True)
 class ProviderSettings:
@@ -24,24 +26,10 @@ class ProviderSettings:
     rate_limit_window_seconds: int = 60
     rate_limit_auth_max_requests: int = 30
     rate_limit_data_max_requests: int = 120
-    intent_summary: str = (
-        "GSS handles post-purchase customer support self-service on behalf of an "
-        "authenticated customer."
-    )
-    intent_in_scope: tuple[str, ...] = (
-        "order status and history",
-        "returns, refunds and exchanges",
-        "shipping and delivery issues",
-        "account, subscription and loyalty management",
-        "reading the shop's resolution protocols",
-        "escalating to a human when self-service cannot resolve the request",
-    )
-    intent_out_of_scope: tuple[str, ...] = (
-        "browsing, search or product recommendations",
-        "placing new orders or shopping",
-        "payments not tied to an existing order",
-        "actions requiring human-only identity proof",
-    )
+    # Defaults sourced from the shared gss_core intent definition; env vars override.
+    intent_summary: str = DEFAULT_SUMMARY
+    intent_in_scope: tuple[str, ...] = DEFAULT_IN_SCOPE
+    intent_out_of_scope: tuple[str, ...] = DEFAULT_OUT_OF_SCOPE
 
 
 def _csv_env(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
