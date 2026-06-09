@@ -455,3 +455,62 @@ def test_provider_uses_injected_shop_adapter_contracts() -> None:
     assert adapter.created_conf >= 1
     assert adapter.consumed_conf >= 1
     assert adapter.appended_audit >= 2
+
+
+def test_domain_describe_carries_affordance_semantics() -> None:
+    client = TestClient(app)
+    response = client.get("/v1/returns/describe")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    # Legacy flat command surface is preserved.
+    assert isinstance(data["command_strings"], list)
+    assert "returns initiate --order-id --item-id --reason [--option]" in data["command_strings"]
+    # Enriched objects carry intent/ordering/scope/risk.
+    initiate = next(c for c in data["commands"] if c["name"] == "returns initiate")
+    assert initiate["purpose"]
+    assert initiate["risk"] == "request"
+    assert initiate["requires_confirmation"] is True
+    assert initiate["scope"] == "returns:request"
+    assert "returns.check-eligibility" in initiate["prerequisites"]
+    assert "returns.confirm" in initiate["next"]
+
+
+def test_describe_shop_includes_intent_for_agent() -> None:
+    client = TestClient(app)
+    payload = client.get("/v1/describe", headers={"GSS-Agent-Key": "agent-dev-key"}).json()["data"]
+    intent = payload["intent"]
+    assert intent["summary"]
+    assert any("return" in s.lower() for s in intent["in_scope"])
+    assert any("shop" in s.lower() or "brows" in s.lower() for s in intent["out_of_scope"])
+    blocked = intent["consumer_constraints"]["ai_agent_blocked_actions"]
+    assert "account.change-email" in blocked
+    # Domains are generated from the registry: products gone, support present.
+    assert "products" not in payload["domains"]
+    assert "support" in payload["domains"]
+
+
+def test_products_domain_removed() -> None:
+    client = TestClient(app)
+    # describe surfaces the canonical "domain not supported" 404.
+    assert client.get("/v1/products/describe").status_code == 404
+    token = client.post("/v1/auth/login", json={"method": "api_key", "customer_id": "CUST-001"}).json()["data"]["access_token"]
+    # The data route no longer exists and is no longer reachable (no products scope is granted).
+    assert client.get("/v1/products/PRD-100", headers=_auth_headers(token)).status_code in (403, 404)
+
+
+def test_support_escalate_creates_handoff() -> None:
+    client = TestClient(app)
+    token = client.post("/v1/auth/login", json={"method": "api_key", "customer_id": "CUST-001"}).json()["data"]["access_token"]
+    res = client.post(
+        "/v1/support/escalate",
+        headers=_auth_headers(token),
+        json={"reason": "refund not received after 30 days", "context": {"order_id": "ORD-1001"}},
+    )
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["status"] == "handoff_created"
+    assert data["handoff_id"].startswith("handoff-")
+
+    missing = client.post("/v1/support/escalate", headers=_auth_headers(token), json={})
+    assert missing.status_code == 400
+    assert missing.json()["error"]["code"] == "VALIDATION_ERROR"

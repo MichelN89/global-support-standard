@@ -32,6 +32,31 @@ class ConsumerType(str, Enum):
     DEVICE = "device"
 
 
+class ActionDescribe(BaseModel):
+    """Machine-readable affordance metadata for a single action, surfaced in describe."""
+
+    name: str
+    command: str
+    purpose: str
+    risk: ActionLevel
+    requires_confirmation: bool = False
+    confirmation_style: str | None = None
+    scope: str | None = None
+    prerequisites: list[str] = Field(default_factory=list)
+    next: list[str] = Field(default_factory=list)
+    consumer_block: list[str] = Field(default_factory=list)
+
+
+class ShopIntent(BaseModel):
+    """Tells a consumer (esp. an AI agent) what GSS is — and is not — for, and how to start."""
+
+    summary: str
+    in_scope: list[str] = Field(default_factory=list)
+    out_of_scope: list[str] = Field(default_factory=list)
+    first_steps: list[str] = Field(default_factory=list)
+    consumer_constraints: dict[str, Any] = Field(default_factory=dict)
+
+
 class DescribeResponse(BaseModel):
     shop: str
     name: str
@@ -43,6 +68,7 @@ class DescribeResponse(BaseModel):
     compliance: dict[str, Any] | None = None
     channels: list[dict[str, Any]] = Field(default_factory=list)
     consumer_policies: dict[str, Any] | None = None
+    intent: ShopIntent | None = None
     public_describe: bool = False
 
 

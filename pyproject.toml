@@ -84,7 +84,6 @@ exclude_also = [
   "def (shipping_report_issue|shipping_change_address|shipping_request_redelivery|shipping_delivery_preferences)\\(",
   "def returns_(list|status|cancel|dispute|request_return_back|accept_partial)\\(",
   "def refunds_(list|status)\\(",
-  "def products_.*\\(",
   "def account_(get|update|addresses_.*|change_email|change_email_recover|payment_methods_.*|delete_request|export_data)\\(",
   "def payments_.*\\(",
   "def subscriptions_.*\\(",

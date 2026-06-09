@@ -442,39 +442,13 @@ def main(ctx: typer.Context, shop: str, parts: list[str] = typer.Argument(...)) 
             _emit(_request(method="POST", endpoint=endpoint, path="/shipping/delivery-preferences", headers=headers, body={"set": flags["set"]}))
             return
 
-    if domain == "products":
-        if action == "get":
-            _required(flags, "id")
-            _emit(_request(method="GET", endpoint=endpoint, path=f"/products/{flags['id']}", headers=headers))
-            return
-        if action == "search":
-            _required(flags, "query")
-            _emit(_request(method="GET", endpoint=endpoint, path="/products/search", headers=headers, params=flags))
-            return
-        if action == "check-availability":
-            _required(flags, "id")
-            params = {"postal_code": flags["postal_code"]} if "postal_code" in flags else None
-            _emit(_request(method="GET", endpoint=endpoint, path=f"/products/check-availability/{flags['id']}", headers=headers, params=params))
-            return
-        if action == "warranty-status":
-            _required(flags, "id", "purchase_date")
-            _emit(
-                _request(
-                    method="GET",
-                    endpoint=endpoint,
-                    path=f"/products/warranty-status/{flags['id']}",
-                    headers=headers,
-                    params={"purchase_date": flags["purchase_date"]},
-                )
-            )
-            return
-        if action == "notify-restock":
-            _required(flags, "id", "email")
-            _emit(_request(method="POST", endpoint=endpoint, path="/products/notify-restock", headers=headers, body={"id": flags["id"], "email": flags["email"]}))
-            return
-        if action == "compare":
-            _required(flags, "ids")
-            _emit(_request(method="GET", endpoint=endpoint, path="/products/compare", headers=headers, params={"ids": flags["ids"]}))
+    if domain == "support":
+        if action == "escalate":
+            _required(flags, "reason")
+            body = {"reason": flags["reason"]}
+            if "context" in flags:
+                body["context"] = flags["context"]
+            _emit(_request(method="POST", endpoint=endpoint, path="/support/escalate", headers=headers, body=body))
             return
 
     if domain == "account":

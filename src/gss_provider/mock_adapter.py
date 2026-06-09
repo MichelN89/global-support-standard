@@ -40,10 +40,12 @@ class InMemoryShopAdapter(ShopRuntimeAdapter):
             "subscriptions:read",
             "loyalty:read",
             "orders:request",
+            "shipping:request",
             "account:request",
             "payments:request",
             "subscriptions:request",
             "loyalty:request",
+            "support:request",
         ]
         self._tokens[token] = (customer_id, expires_at, scopes)
         return IssuedToken(

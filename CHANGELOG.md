@@ -10,6 +10,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Capability-split adapter contracts (`CustomerAuthStore`, `AgentAuthStore`, `VerificationStore`) and scope resolution support.
 - Baseline in-memory security controls module with scope mapping and rate limiting helpers.
 - Security exceptions register (`docs/security-exceptions.md`) to track temporary CVE audit overrides.
+- Shared action registry (`gss_core/actions.py`) — the single source of truth for every GSS action's routing binding and semantic/affordance metadata (purpose, risk, scope, confirmation style, prerequisites, next steps, consumer restrictions).
+- Semantic affordance layer in `describe`: `GET /v1/{domain}/describe` now returns enriched command objects (alongside a backward-compatible `command_strings` list), and `GET /v1/describe` carries a shop `intent` block (in/out of scope, first steps, AI-agent-blocked actions) so agents learn ordering and intent.
+- `support escalate` — a standardized human-handoff primitive for when self-service cannot resolve a request.
 
 ### Changed
 - Legacy `/v1/auth/login` is now disabled by default (`GSS_ENABLE_LEGACY_LOGIN=0`) with explicit migration error response.
@@ -17,6 +20,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Provider middleware now enforces token scope checks for protected routes and applies baseline rate limiting.
 - Mock customer verification now fails closed for unknown/missing order context (no hardcoded customer fallback).
 - Coverage exclusions were reduced for order mutation handlers, with dedicated tests added for `orders cancel|modify|reorder`.
+- Scope enforcement and domain discovery are now driven by the shared action registry; the provider's domain list and required scopes can no longer drift from the served actions.
+
+### Removed
+- The `products` domain is out of scope. GSS handles post-purchase support for an authenticated customer, not shopping/merchandising; product browsing, search and comparison endpoints were removed from the provider, CLI, spec and docs.
 
 ## [0.2.3] - 2026-03-31
 
